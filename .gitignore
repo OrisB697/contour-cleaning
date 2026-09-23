@@ -1,0 +1,70 @@
+# =========================
+# C# / .NET / Visual Studio
+# =========================
+
+# Результаты сборки
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]uild/
+[Bb]uildLog/
+*.log
+
+# Кэш и настройки Visual Studio
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.csproj.user
+*.vbproj.user
+*.fsproj.user
+*.dbproj.user
+*.vcxproj.user
+
+# ReSharper / Rider
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+.idea/
+*.sln.iml
+
+# NuGet
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+!**/[Pp]ackages/repositories.config
+
+# Тесты и покрытие
+[Tt]est[Rr]esult*/
+[Bb]uild[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+
+# Публикация
+*.publishproj
+*.pubxml
+*.pubxml.user
+publish/
+Publish/
+*.azurePubxml
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Прочее
+*.cache
+*.pidb
+*.svclog
+*.scc
