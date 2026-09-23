@@ -3,264 +3,151 @@ using Lab1_OZR1.Geometry;
 
 namespace Lab1_OZR1.Movement
 {
-    /// <summary>
-    /// Движущаяся равнобедренная перевёрнутая трапеция.
-    ///
-    /// Класс содержит математическую и программную логику
-    /// перемещения фигуры и обработки выхода за границы
-    /// области движения.
-    /// </summary>
     public class MovingTrapezoid
     {
         private double _centerX;
         private double _centerY;
+        private Vector2D _velocity;
+        private double _rotationAngle;
+        private double _scale;
 
-        public double CenterX
-        {
-            get
-            {
-                return _centerX;
-            }
-        }
+        public double CenterX { get { return _centerX; } }
+        public double CenterY { get { return _centerY; } }
 
-        public double CenterY
-        {
-            get
-            {
-                return _centerY;
-            }
-        }
-
-        /// <summary>
-        /// Ширина верхнего основания.
-        /// </summary>
         public double TopWidth { get; }
-
-        /// <summary>
-        /// Ширина нижнего основания.
-        /// </summary>
         public double BottomWidth { get; }
-
-        /// <summary>
-        /// Высота трапеции.
-        /// </summary>
         public double Height { get; }
 
-        /// <summary>
-        /// Направляющий вектор движения.
-        /// </summary>
-        public Vector2D Velocity { get; private set; }
+        public Vector2D Velocity { get { return _velocity; } }
+
+        public double RotationAngle
+        {
+            get { return _rotationAngle; }
+            set { _rotationAngle = value; }
+        }
+
+        public double Scale
+        {
+            get { return _scale; }
+            set
+            {
+                if (value < 0.5) value = 0.5;
+                if (value > 2.0) value = 2.0;
+                _scale = value;
+            }
+        }
 
         public MovingTrapezoid(
-            double centerX,
-            double centerY,
-            double topWidth,
-            double bottomWidth,
-            double height,
+            double centerX, double centerY,
+            double topWidth, double bottomWidth, double height,
             Vector2D velocity)
         {
-            if (topWidth <= 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(topWidth));
-            }
-
-            if (bottomWidth <= 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(bottomWidth));
-            }
-
-            if (bottomWidth > topWidth)
-            {
-                throw new ArgumentException(
-                    "BottomWidth не может быть больше TopWidth.");
-            }
-
-            if (height <= 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(height));
-            }
+            if (topWidth <= 0) throw new ArgumentOutOfRangeException(nameof(topWidth));
+            if (bottomWidth <= 0) throw new ArgumentOutOfRangeException(nameof(bottomWidth));
+            if (bottomWidth > topWidth) throw new ArgumentException("BottomWidth не может быть больше TopWidth.");
+            if (height <= 0) throw new ArgumentOutOfRangeException(nameof(height));
 
             _centerX = centerX;
             _centerY = centerY;
-
             TopWidth = topWidth;
             BottomWidth = bottomWidth;
             Height = height;
-
-            Velocity = velocity;
+            _velocity = velocity;
+            _rotationAngle = 0.0;
+            _scale = 1.0;
         }
 
-        // ============================================================
-        // ВЕРШИНЫ ФИГУРЫ
-        // ============================================================
+        private Point2D Transform(double x, double y)
+        {
+            double sx = _centerX + (x - _centerX) * _scale;
+            double sy = _centerY + (y - _centerY) * _scale;
+
+            double dx = sx - _centerX;
+            double dy = sy - _centerY;
+            double cos = Math.Cos(_rotationAngle);
+            double sin = Math.Sin(_rotationAngle);
+
+            return new Point2D(
+                _centerX + dx * cos - dy * sin,
+                _centerY + dx * sin + dy * cos);
+        }
 
         public Point2D TopLeft
         {
-            get
-            {
-                return new Point2D(
-                    _centerX - TopWidth / 2.0,
-                    _centerY - Height / 2.0
-                );
-            }
+            get { return Transform(_centerX - TopWidth / 2.0, _centerY - Height / 2.0); }
         }
 
         public Point2D TopRight
         {
-            get
-            {
-                return new Point2D(
-                    _centerX + TopWidth / 2.0,
-                    _centerY - Height / 2.0
-                );
-            }
+            get { return Transform(_centerX + TopWidth / 2.0, _centerY - Height / 2.0); }
         }
 
         public Point2D BottomLeft
         {
-            get
-            {
-                return new Point2D(
-                    _centerX - BottomWidth / 2.0,
-                    _centerY + Height / 2.0
-                );
-            }
+            get { return Transform(_centerX - BottomWidth / 2.0, _centerY + Height / 2.0); }
         }
 
         public Point2D BottomRight
         {
-            get
-            {
-                return new Point2D(
-                    _centerX + BottomWidth / 2.0,
-                    _centerY + Height / 2.0
-                );
-            }
-        }
-
-        // ============================================================
-        // ГАБАРИТНЫЙ ПРЯМОУГОЛЬНИК
-        // ============================================================
-
-        /// <summary>
-        /// Ортогональный прямоугольник, описывающий габариты фигуры.
-        /// </summary>
-        public Rectangle2D BoundingRectangle
-        {
-            get
-            {
-                return new Rectangle2D(
-                    _centerX - TopWidth / 2.0,
-                    _centerY - Height / 2.0,
-                    TopWidth,
-                    Height
-                );
-            }
+            get { return Transform(_centerX + BottomWidth / 2.0, _centerY + Height / 2.0); }
         }
 
         public Triangle2D BoundingTriangle
         {
             get
             {
-                double w = TopWidth;
-                double h = Height;
-
+                double w = TopWidth * _scale;
+                double h = Height * _scale;
                 double a = Math.Max(w, 2.0 * h / Math.Sqrt(3.0));
                 double hTri = a * Math.Sqrt(3.0) / 2.0;
 
                 Point2D v1 = new Point2D(_centerX, _centerY - 2.0 * hTri / 3.0);
-                Point2D v2 = new Point2D(_centerX - a / 2, _centerY + hTri / 3.0);
-                Point2D v3 = new Point2D(_centerX + a / 2, _centerY + hTri / 3.0);
+                Point2D v2 = new Point2D(_centerX - a / 2.0, _centerY + hTri / 3.0);
+                Point2D v3 = new Point2D(_centerX + a / 2.0, _centerY + hTri / 3.0);
 
                 return new Triangle2D(v1, v2, v3);
             }
         }
 
-        // ============================================================
-        // СКОРОСТЬ
-        // ============================================================
-
         public void SetVelocity(Vector2D velocity)
         {
-            Velocity = velocity;
+            _velocity = velocity;
         }
 
-        // ============================================================
-        // ПЕРЕМЕЩЕНИЕ
-        // ============================================================
-
-        /// <summary>
-        /// Выполняет один шаг прямолинейного движения.
-        ///
-        /// x(k+1) = x(k) + vx
-        /// y(k+1) = y(k) + vy
-        /// </summary>
         public void Move()
         {
-            _centerX += Velocity.X;
-            _centerY += Velocity.Y;
+            _centerX += _velocity.X;
+            _centerY += _velocity.Y;
         }
 
-        /// <summary>
-        /// Выполняет несколько шагов движения.
-        /// </summary>
         public void Move(int steps)
         {
-            if (steps < 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(steps));
-            }
-
-            for (int i = 0; i < steps; i++)
-            {
-                Move();
-            }
+            if (steps < 0) throw new ArgumentOutOfRangeException(nameof(steps));
+            for (int i = 0; i < steps; i++) Move();
         }
 
-        // ============================================================
-        // ПРОВЕРКА ГРАНИЦ
-        // ============================================================
-
-        /// <summary>
-        /// Проверяет, полностью ли фигура находится внутри
-        /// области движения.
-        /// </summary>
         public bool IsInside(Rectangle2D area)
         {
             return BoundingTriangle.IsInside(area);
         }
 
-        /// <summary>
-        /// Проверяет, находится ли фигура полностью за пределами
-        /// области движения.
-        /// </summary>
         public bool IsOutside(Rectangle2D area)
         {
             return BoundingTriangle.IsOutside(area);
         }
-        // ============================================================
-        // ПЕРЕНОС ЧЕРЕЗ ГРАНИЦУ
-        // ============================================================
 
-        /// <summary>
-        /// Переносит фигуру на противоположную сторону области,
-        /// если её габаритный прямоугольник полностью вышел
-        /// за соответствующую границу.
-        ///
-        /// Возвращает true, если был выполнен перенос.
-        /// </summary>
         public bool CheckAndWrap(Rectangle2D area)
         {
             bool wrapped = false;
 
-            double w = TopWidth;
-            double h = Height;
+            double w = TopWidth * _scale;
+            double h = Height * _scale;
             double a = Math.Max(w, 2.0 * h / Math.Sqrt(3.0));
             double hTri = a * Math.Sqrt(3.0) / 2.0;
 
-            double halfW = a / 2.0;          // расстояние от центра до V2/V3 по X
-            double upDist = 2.0 * hTri / 3.0; // расстояние от центра до V1 по Y
-            double dnDist = hTri / 3.0;       // расстояние от центра до V2/V3 по Y
+            double halfW = a / 2.0;
+            double upDist = 2.0 * hTri / 3.0;
+            double dnDist = hTri / 3.0;
 
             Triangle2D tri = BoundingTriangle;
 
@@ -291,22 +178,9 @@ namespace Lab1_OZR1.Movement
             return wrapped;
         }
 
-        // ============================================================
-        // ПОЛНЫЙ ШАГ
-        // ============================================================
-
-        /// <summary>
-        /// Выполняет один полный шаг алгоритма:
-        ///
-        /// 1. перемещение;
-        /// 2. получение габаритов;
-        /// 3. проверка выхода;
-        /// 4. перенос на противоположную сторону.
-        /// </summary>
         public bool Update(Rectangle2D area)
         {
             Move();
-
             return CheckAndWrap(area);
         }
     }

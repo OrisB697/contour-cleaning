@@ -13,11 +13,13 @@ namespace Lab1_OZR1
 
         private double _prevCenterX;
         private double _prevCenterY;
+        private double _prevRotationAngle;
+        private double _prevScale;
 
         private Timer _timer;
-        private double _angle;         // текущий угол поворота фона
-        private double _paintedAngle;  // угол отрисованный
-        private Bitmap _buffer;        // задний буфер
+        private double _angle;
+        private double _paintedAngle;
+        private Bitmap _buffer;
         private Graphics _bufferGraphics;
 
         private const int RINGS = 12;
@@ -29,12 +31,12 @@ namespace Lab1_OZR1
             InitializeComponent();
 
             this.ClientSize = new Size(900, 700);
-            this.Text = "ЛР1 — КВ2 — контурная очистка (ДЗ.А1: треугольный габарит)";
+            this.Text = "ЛР1 — КВ2 — контурная очистка";
 
-            // Двойная буферизация
             this.DoubleBuffered = true;
+            this.KeyPreview = true;
+            this.KeyDown += Form1_KeyDown;
 
-            // Область движения
             _area = new Rectangle2D(0, 0, ClientSize.Width, ClientSize.Height);
 
             _trapezoid = new MovingTrapezoid(
@@ -48,6 +50,8 @@ namespace Lab1_OZR1
 
             _prevCenterX = _trapezoid.CenterX;
             _prevCenterY = _trapezoid.CenterY;
+            _prevRotationAngle = _trapezoid.RotationAngle;
+            _prevScale = _trapezoid.Scale;
 
             _buffer = new Bitmap(ClientSize.Width, ClientSize.Height);
             _bufferGraphics = Graphics.FromImage(_buffer);
@@ -87,12 +91,50 @@ namespace Lab1_OZR1
         {
             _prevCenterX = _trapezoid.CenterX;
             _prevCenterY = _trapezoid.CenterY;
+            _prevRotationAngle = _trapezoid.RotationAngle;
+            _prevScale = _trapezoid.Scale;
 
             _trapezoid.Update(_area);
 
             _angle += 0.02;
 
             Invalidate();
+        }
+
+        private void Form1_KeyDown(object sender, KeyEventArgs e)
+        {
+            const double angleStep = PI / 36.0;
+            const double scaleStep = 0.05;
+            const double velStep = 1.0;
+
+            if (e.KeyCode == Keys.Q)
+                _trapezoid.RotationAngle -= angleStep;
+            else if (e.KeyCode == Keys.E)
+                _trapezoid.RotationAngle += angleStep;
+            else if (e.KeyCode == Keys.A)
+                _trapezoid.Scale -= scaleStep;
+            else if (e.KeyCode == Keys.D)
+                _trapezoid.Scale += scaleStep;
+            else if (e.KeyCode == Keys.W)
+                ApplyVelocity(_trapezoid.Velocity.X + velStep, _trapezoid.Velocity.Y);
+            else if (e.KeyCode == Keys.S)
+                ApplyVelocity(_trapezoid.Velocity.X - velStep, _trapezoid.Velocity.Y);
+            else if (e.KeyCode == Keys.Up)
+                ApplyVelocity(_trapezoid.Velocity.X, _trapezoid.Velocity.Y - velStep);
+            else if (e.KeyCode == Keys.Down)
+                ApplyVelocity(_trapezoid.Velocity.X, _trapezoid.Velocity.Y + velStep);
+
+            Invalidate();
+        }
+
+        private void ApplyVelocity(double vx, double vy)
+        {
+            const double minAbs = 0.1;
+
+            if (Math.Abs(vx) < minAbs) vx = vx >= 0 ? minAbs : -minAbs;
+            if (Math.Abs(vy) < minAbs) vy = vy >= 0 ? minAbs : -minAbs;
+
+            _trapezoid.SetVelocity(new Vector2D(vx, vy));
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -103,6 +145,7 @@ namespace Lab1_OZR1
                 _bufferGraphics,
                 _prevCenterX, _prevCenterY,
                 _trapezoid.TopWidth, _trapezoid.BottomWidth, _trapezoid.Height,
+                _prevRotationAngle, _prevScale,
                 erase: true);
 
             DrawBackground(_bufferGraphics, _paintedAngle, erase: true);
@@ -113,6 +156,7 @@ namespace Lab1_OZR1
                 _bufferGraphics,
                 _trapezoid.CenterX, _trapezoid.CenterY,
                 _trapezoid.TopWidth, _trapezoid.BottomWidth, _trapezoid.Height,
+                _trapezoid.RotationAngle, _trapezoid.Scale,
                 erase: false);
 
             e.Graphics.DrawImageUnscaled(_buffer, 0, 0);
@@ -158,15 +202,31 @@ namespace Lab1_OZR1
             }
         }
 
-        private void DrawTrapezoidShape
-        (
+        private PointF TransformPoint(
+            double x, double y,
+            double cx, double cy,
+            double rotationAngle, double scale)
+        {
+            double sx = cx + (x - cx) * scale;
+            double sy = cy + (y - cy) * scale;
+
+            double dx = sx - cx;
+            double dy = sy - cy;
+            double cos = Math.Cos(rotationAngle);
+            double sin = Math.Sin(rotationAngle);
+
+            return new PointF(
+                (float)(cx + dx * cos - dy * sin),
+                (float)(cy + dx * sin + dy * cos));
+        }
+
+        private void DrawTrapezoidShape(
             Graphics g,
             double centerX, double centerY,
             double topWidth, double bottomWidth, double height,
-            bool erase
-        )
+            double rotationAngle, double scale,
+            bool erase)
         {
-            // ----- Вершины трапеции -----
             double tlX = centerX - topWidth / 2.0;
             double tlY = centerY - height / 2.0;
             double trX = centerX + topWidth / 2.0;
@@ -176,25 +236,26 @@ namespace Lab1_OZR1
             double brX = centerX + bottomWidth / 2.0;
             double brY = centerY + height / 2.0;
 
-            // ----- Вершины габаритного равностороннего треугольника (ДЗ.А1) -----
-            // Сторона a подобрана так, чтобы треугольник полностью покрывал
-            // габаритный прямоугольник трапеции W x H (W = topWidth).
-            double w = topWidth;
-            double h = height;
+            double w = topWidth * scale;
+            double h = height * scale;
             double a = Math.Max(w, 2.0 * h / Math.Sqrt(3.0));
             double hTri = a * Math.Sqrt(3.0) / 2.0;
 
             PointF[] trianglePts =
             {
-                new PointF((float)centerX,
-                           (float)(centerY - 2.0 * hTri / 3.0)),
-                new PointF((float)(centerX - a / 2.0),
-                           (float)(centerY + hTri / 3.0)),
-                new PointF((float)(centerX + a / 2.0),
-                           (float)(centerY + hTri / 3.0))
+                new PointF((float)centerX, (float)(centerY - 2.0 * hTri / 3.0)),
+                new PointF((float)(centerX - a / 2.0), (float)(centerY + hTri / 3.0)),
+                new PointF((float)(centerX + a / 2.0), (float)(centerY + hTri / 3.0))
             };
 
-            // ----- Цвета и толщина пера -----
+            PointF tl = TransformPoint(tlX, tlY, centerX, centerY, rotationAngle, scale);
+            PointF tr = TransformPoint(trX, trY, centerX, centerY, rotationAngle, scale);
+            PointF bl = TransformPoint(blX, blY, centerX, centerY, rotationAngle, scale);
+            PointF br = TransformPoint(brX, brY, centerX, centerY, rotationAngle, scale);
+
+            PointF blTop = TransformPoint(blX, tlY, centerX, centerY, rotationAngle, scale);
+            PointF brTop = TransformPoint(brX, trY, centerX, centerY, rotationAngle, scale);
+
             Color fillRect = Color.White;
             Color leftColor = Color.White;
             Color midColor = Color.White;
@@ -219,46 +280,20 @@ namespace Lab1_OZR1
                 g.FillPolygon(bRect, trianglePts);
                 g.DrawPolygon(pen, trianglePts);
 
-                PointF[] leftPts =
-                {
-                    new PointF((float)tlX, (float)tlY),
-                    new PointF((float)blX, (float)blY),
-                    new PointF((float)blX, (float)tlY)
-                };
+                PointF[] leftPts = { tl, bl, blTop };
                 g.FillPolygon(bLeft, leftPts);
 
-                PointF[] midPts =
-                {
-                    new PointF((float)blX, (float)tlY),
-                    new PointF((float)brX, (float)tlY),
-                    new PointF((float)brX, (float)blY),
-                    new PointF((float)blX, (float)blY)
-                };
+                PointF[] midPts = { blTop, brTop, br, bl };
                 g.FillPolygon(bMid, midPts);
 
-                PointF[] rightPts =
-                {
-                    new PointF((float)trX, (float)trY),
-                    new PointF((float)brX, (float)brY),
-                    new PointF((float)brX, (float)trY)
-                };
+                PointF[] rightPts = { tr, br, brTop };
                 g.FillPolygon(bRight, rightPts);
 
-                PointF[] trapezoidPts =
-                {
-                    new PointF((float)tlX, (float)tlY),
-                    new PointF((float)trX, (float)trY),
-                    new PointF((float)brX, (float)brY),
-                    new PointF((float)blX, (float)blY)
-                };
+                PointF[] trapezoidPts = { tl, tr, br, bl };
                 g.DrawPolygon(pen, trapezoidPts);
 
-                g.DrawLine(pen,
-                    (float)blX, (float)blY,
-                    (float)blX, (float)tlY);
-                g.DrawLine(pen,
-                    (float)brX, (float)brY,
-                    (float)brX, (float)trY);
+                g.DrawLine(pen, bl, blTop);
+                g.DrawLine(pen, br, brTop);
             }
         }
 
