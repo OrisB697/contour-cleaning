@@ -8,23 +8,17 @@ namespace Lab1_OZR1
 {
     public partial class Form1 : Form
     {
-        // ------------------------------------------------------------
-        // Логика движения (часть ОЗ.Р1 — взято из C#-проекта)
-        // ------------------------------------------------------------
+
         private MovingTrapezoid _trapezoid;
         private Rectangle2D _area;
 
-        // Предыдущие координаты центра — нужны для контурной очистки.
         private double _prevCenterX;
         private double _prevCenterY;
 
-        // ------------------------------------------------------------
-        // Отрисовка (часть ОЗ.Р2)
-        // ------------------------------------------------------------
         private Timer _timer;
         private double _angle;         // текущий угол поворота фона
-        private double _paintedAngle;  // угол, уже отрисованный на холсте
-        private Bitmap _buffer;        // задний буфер (двойная буферизация)
+        private double _paintedAngle;  // угол отрисованный
+        private Bitmap _buffer;        // задний буфер
         private Graphics _bufferGraphics;
 
         private const int RINGS = 12;
@@ -38,13 +32,12 @@ namespace Lab1_OZR1
             this.ClientSize = new Size(900, 700);
             this.Text = "ЛР1 — КВ2 — контурная очистка";
 
-            // Двойная буферизация самого окна, чтобы не мерцало
+            // Двойная буферизация 
             this.DoubleBuffered = true;
 
             // Область движения
             _area = new Rectangle2D(0, 0, ClientSize.Width, ClientSize.Height);
 
-            // Трапеция по КВ2: перевёрнутая, верхнее основание шире нижнего
             _trapezoid = new MovingTrapezoid(
                 centerX: 450,
                 centerY: 350,
@@ -57,24 +50,17 @@ namespace Lab1_OZR1
             _prevCenterX = _trapezoid.CenterX;
             _prevCenterY = _trapezoid.CenterY;
 
-            // Буфер
             _buffer = new Bitmap(ClientSize.Width, ClientSize.Height);
             _bufferGraphics = Graphics.FromImage(_buffer);
             ClearBuffer();
 
-            // Таймер ~60 FPS
             _timer = new Timer();
             _timer.Interval = 16;
             _timer.Tick += Timer_Tick;
             _timer.Start();
 
-            // При изменении размера — пересоздаём буфер и область
             this.Resize += Form1_Resize;
         }
-
-        // ------------------------------------------------------------
-        // Служебное
-        // ------------------------------------------------------------
 
         private void ClearBuffer()
         {
@@ -98,60 +84,32 @@ namespace Lab1_OZR1
             Invalidate();
         }
 
-        // ------------------------------------------------------------
-        // Шаг анимации
-        // ------------------------------------------------------------
-
         private void Timer_Tick(object sender, EventArgs e)
         {
-            // Запоминаем старую позицию ДО движения
             _prevCenterX = _trapezoid.CenterX;
             _prevCenterY = _trapezoid.CenterY;
 
-            // Перемещение + перенос через границы (логика ОЗ.Р1)
             _trapezoid.Update(_area);
 
-            // Поворот фона
             _angle += 0.02;
 
             Invalidate();
         }
 
-        // ------------------------------------------------------------
-        // Контурная очистка
-        // ------------------------------------------------------------
-        //
-        // Принцип: фон целиком НЕ перерисовываем. Стираем только
-        // движущиеся элементы (ромбы фона + трапецию) в СТАРЫХ позициях
-        // белым по контуру, затем рисуем их в НОВЫХ.
-        //
-        // Порядок строго такой:
-        //   1. стереть СТАРУЮ трапецию
-        //   2. стереть СТАРЫЙ фон
-        //   3. нарисовать НОВЫЙ фон
-        //   4. нарисовать НОВУЮ трапецию
-        //
-        // Если стереть трапецию после того, как нарисован новый фон,
-        // белый прямоугольник затрёт часть ромбов — будут артефакты.
-
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
 
-            // 1. Стираем СТАРУЮ трапецию — по СТАРЫМ координатам
             DrawTrapezoidShape(
                 _bufferGraphics,
                 _prevCenterX, _prevCenterY,
                 _trapezoid.TopWidth, _trapezoid.BottomWidth, _trapezoid.Height,
                 erase: true);
 
-            // 2. Стираем СТАРЫЙ фон — по старому углу
             DrawBackground(_bufferGraphics, _paintedAngle, erase: true);
 
-            // 3. Рисуем НОВЫЙ фон
             DrawBackground(_bufferGraphics, _angle, erase: false);
 
-            // 4. Рисуем НОВУЮ трапецию — по новым координатам
             DrawTrapezoidShape(
                 _bufferGraphics,
                 _trapezoid.CenterX, _trapezoid.CenterY,
@@ -164,16 +122,11 @@ namespace Lab1_OZR1
             _paintedAngle = _angle;
         }
 
-        // ------------------------------------------------------------
-        // Отрисовка фона: ромбы, радиальный ломаный узор
-        // ------------------------------------------------------------
-
         private void DrawBackground(Graphics g, double angle, bool erase)
         {
             Color fillColor = Color.White;
             Color penColor = erase ? Color.White : Color.Black;
-            int penWidth = erase ? 4 : 2;   // при стирании перо толще,
-                                            // чтобы перекрыть старый контур
+            int penWidth = erase ? 4 : 2;   // Делаем толще чтобы точно все затереть
 
             using (Brush brush = new SolidBrush(fillColor))
             using (Pen pen = new Pen(penColor, penWidth))
@@ -201,30 +154,19 @@ namespace Lab1_OZR1
                         pts[3] = new PointF((float)(x - size), (float)y);
 
                         g.FillPolygon(brush, pts);
-                        g.DrawPolygon(pen, pts);   // <-- теперь всегда, и при erase тоже
+                        g.DrawPolygon(pen, pts);
                     }
                 }
             }
         }
 
-        // ------------------------------------------------------------
-        // Отрисовка трапеции по КВ2
-        // ------------------------------------------------------------
-        //
-        // Фигура:
-        //   - закрашенный прямоугольник вокруг трапеции (без контура);
-        //   - три цветные части: левая, средняя, правая;
-        //   - контур: стороны трапеции + две высоты (вертикали из нижних
-        //     углов к верхнему основанию).
-        //
-        // Координаты центра передаются явно, чтобы можно было стереть
-        // фигуру в старой позиции (её уже нет в объекте _trapezoid).
-
-        private void DrawTrapezoidShape(
-    Graphics g,
-    double centerX, double centerY,
-    double topWidth, double bottomWidth, double height,
-    bool erase)
+        private void DrawTrapezoidShape
+        (
+            Graphics g,
+            double centerX, double centerY,
+            double topWidth, double bottomWidth, double height,
+            bool erase
+        )
         {
             // Вершины
             double tlX = centerX - topWidth / 2.0;
@@ -242,8 +184,7 @@ namespace Lab1_OZR1
             Color midColor = Color.White;
             Color rightColor = Color.White;
             Color outline = erase ? Color.White : Color.Black;
-            int penWidth = erase ? 4 : 2;   // при стирании перо толще,
-                                            // чтобы перекрыть старый контур
+            int penWidth = erase ? 4 : 2;
 
             if (!erase)
             {
@@ -259,7 +200,6 @@ namespace Lab1_OZR1
             using (Brush bRight = new SolidBrush(rightColor))
             using (Pen pen = new Pen(outline, penWidth))
             {
-                // 1. Габаритный прямоугольник вокруг трапеции
                 double left = centerX - topWidth / 2.0;
                 double top = centerY - height / 2.0;
                 double width = topWidth;
@@ -269,53 +209,44 @@ namespace Lab1_OZR1
                     (float)left, (float)top,
                     (float)width, (float)rectH);
 
-                // 2. Левая часть
                 PointF[] leftPts =
                 {
-            new PointF((float)tlX, (float)tlY),
-            new PointF((float)blX, (float)blY),
-            new PointF((float)blX, (float)tlY)
-        };
+                    new PointF((float)tlX, (float)tlY),
+                    new PointF((float)blX, (float)blY),
+                    new PointF((float)blX, (float)tlY)
+                };
                 g.FillPolygon(bLeft, leftPts);
 
-                // 3. Средняя часть
                 PointF[] midPts =
                 {
-            new PointF((float)blX, (float)tlY),
-            new PointF((float)brX, (float)tlY),
-            new PointF((float)brX, (float)blY),
-            new PointF((float)blX, (float)blY)
-        };
+                    new PointF((float)blX, (float)tlY),
+                    new PointF((float)brX, (float)tlY),
+                    new PointF((float)brX, (float)blY),
+                    new PointF((float)blX, (float)blY)
+                };
                 g.FillPolygon(bMid, midPts);
 
-                // 4. Правая часть
                 PointF[] rightPts =
                 {
-            new PointF((float)trX, (float)trY),
-            new PointF((float)brX, (float)brY),
-            new PointF((float)brX, (float)trY)
-        };
+                    new PointF((float)trX, (float)trY),
+                    new PointF((float)brX, (float)brY),
+                    new PointF((float)brX, (float)trY)
+                };
                 g.FillPolygon(bRight, rightPts);
 
-                // 5. Контур трапеции — ТЕПЕРЬ ВСЕГДА, и при erase тоже
                 PointF[] trapezoidPts =
                 {
-            new PointF((float)tlX, (float)tlY),
-            new PointF((float)trX, (float)trY),
-            new PointF((float)brX, (float)brY),
-            new PointF((float)blX, (float)blY)
-        };
+                    new PointF((float)tlX, (float)tlY),
+                    new PointF((float)trX, (float)trY),
+                    new PointF((float)brX, (float)brY),
+                    new PointF((float)blX, (float)blY)
+                };
                 g.DrawPolygon(pen, trapezoidPts);
 
-                // 6. Две высоты — тоже ВСЕГДА
                 g.DrawLine(pen, (float)blX, (float)blY, (float)blX, (float)tlY);
                 g.DrawLine(pen, (float)brX, (float)brY, (float)brX, (float)trY);
             }
         }
-
-        // ------------------------------------------------------------
-        // Освобождение ресурсов
-        // ------------------------------------------------------------
 
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
