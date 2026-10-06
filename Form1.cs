@@ -1,8 +1,10 @@
-﻿using System;
-using System.Drawing;
-using System.Windows.Forms;
-using Lab1_OZR1.Geometry;
+﻿using Lab1_OZR1.Geometry;
 using Lab1_OZR1.Movement;
+using System;
+using System.Drawing;
+using System.Net.NetworkInformation;
+using System.Security.Policy;
+using System.Windows.Forms;
 
 namespace Lab1_OZR1
 {
@@ -21,7 +23,7 @@ namespace Lab1_OZR1
         private Bitmap _buffer;        // задний буфер
         private Graphics _bufferGraphics;
 
-        private const int RINGS = 12;
+        private const int RINGS = 17;
         private const int PER_RING = 8;
         private const double PI = Math.PI;
 
@@ -122,6 +124,17 @@ namespace Lab1_OZR1
             _paintedAngle = _angle;
         }
 
+        private PointF RotatePoint(float x, float y, float cx, float cy, double angle)
+        {
+            double cosA = Math.Cos(angle);
+            double sinA = Math.Sin(angle);
+            float dx = x - cx;
+            float dy = y - cy;
+            float rotatedX = (float)(dx * cosA - dy * sinA + cx);
+            float rotatedY = (float)(dx * sinA + dy * cosA + cy);
+            return new PointF(rotatedX, rotatedY);
+        }
+
         private void DrawBackground(Graphics g, double angle, bool erase)
         {
             Color fillColor = Color.White;
@@ -134,28 +147,24 @@ namespace Lab1_OZR1
                 int cx = ClientSize.Width / 2;
                 int cy = ClientSize.Height / 2;
 
-                for (int ring = 0; ring < RINGS; ring++)
+                int s = 50;
+
+                for(int colRomb = 0; colRomb < RINGS; colRomb++)
                 {
-                    for (int i = 0; i < PER_RING; i++)
-                    {
-                        double radius = (ring + 1) * 40.0;
-                        double a = (2.0 * PI / PER_RING) * i
-                                 + (ring + 1) * 0.15
-                                 + angle;
+                    PointF[] romb = new PointF[4];
+                    romb[0] = new PointF((float)(cx), (float)(cy - s));
+                    romb[1] = new PointF((float)(cx + s), (float)(cy));
+                    romb[2] = new PointF((float)(cx), (float)(cy + s));
+                    romb[3] = new PointF((float)(cx - s), (float)(cy));
 
-                        double x = cx + radius * Math.Cos(a);
-                        double y = cy + radius * Math.Sin(a);
-                        double size = 10.0 + (ring + 1) * 1.5;
+                    romb[0] = RotatePoint(romb[0].X, romb[0].Y, cx, cy, angle + colRomb * 3);
+                    romb[1] = RotatePoint(romb[1].X, romb[1].Y, cx, cy, angle + colRomb * 3);
+                    romb[2] = RotatePoint(romb[2].X, romb[2].Y, cx, cy, angle + colRomb * 3);
+                    romb[3] = RotatePoint(romb[3].X, romb[3].Y, cx, cy, angle + colRomb * 3);
 
-                        PointF[] pts = new PointF[4];
-                        pts[0] = new PointF((float)x, (float)(y - size));
-                        pts[1] = new PointF((float)(x + size), (float)y);
-                        pts[2] = new PointF((float)x, (float)(y + size));
-                        pts[3] = new PointF((float)(x - size), (float)y);
+                    s += 20;
 
-                        g.FillPolygon(brush, pts);
-                        g.DrawPolygon(pen, pts);
-                    }
+                    g.DrawPolygon(pen, romb);
                 }
             }
         }
