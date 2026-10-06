@@ -3,6 +3,9 @@ using Lab1_OZR1.Geometry;
 
 namespace Lab1_OZR1.Movement
 {
+
+    
+
     /// <summary>
     /// Движущаяся равнобедренная перевёрнутая трапеция.
     ///
@@ -31,6 +34,15 @@ namespace Lab1_OZR1.Movement
             }
         }
 
+        private double _rotationAngle;
+
+        public double RotationAngle
+        {
+            get { return _rotationAngle; }
+        }
+
+        public double AngularVelocity { get; private set; }
+
         /// <summary>
         /// Ширина верхнего основания.
         /// </summary>
@@ -57,7 +69,8 @@ namespace Lab1_OZR1.Movement
             double topWidth,
             double bottomWidth,
             double height,
-            Vector2D velocity)
+            Vector2D velocity,
+            double angularVelocity = 0.0)
         {
             if (topWidth <= 0)
             {
@@ -88,20 +101,31 @@ namespace Lab1_OZR1.Movement
             Height = height;
 
             Velocity = velocity;
+            AngularVelocity = angularVelocity;
+            _rotationAngle = 0.0;
         }
 
         // ============================================================
         // ВЕРШИНЫ ФИГУРЫ
         // ============================================================
 
+        private Point2D RotateAroundCenter(Point2D point)
+        {
+            return point.Rotate(
+                new Point2D(_centerX, _centerY),
+                _rotationAngle
+            );
+        }
+
         public Point2D TopLeft
         {
             get
             {
-                return new Point2D(
+                Point2D basePoint = new Point2D(
                     _centerX - TopWidth / 2.0,
                     _centerY - Height / 2.0
                 );
+                return RotateAroundCenter(basePoint);
             }
         }
 
@@ -109,10 +133,11 @@ namespace Lab1_OZR1.Movement
         {
             get
             {
-                return new Point2D(
+                Point2D basePoint = new Point2D(
                     _centerX + TopWidth / 2.0,
                     _centerY - Height / 2.0
                 );
+                return RotateAroundCenter(basePoint);
             }
         }
 
@@ -120,10 +145,11 @@ namespace Lab1_OZR1.Movement
         {
             get
             {
-                return new Point2D(
+                Point2D basePoint = new Point2D(
                     _centerX - BottomWidth / 2.0,
                     _centerY + Height / 2.0
                 );
+                return RotateAroundCenter(basePoint);
             }
         }
 
@@ -131,10 +157,11 @@ namespace Lab1_OZR1.Movement
         {
             get
             {
-                return new Point2D(
+                Point2D basePoint = new Point2D(
                     _centerX + BottomWidth / 2.0,
                     _centerY + Height / 2.0
                 );
+                return RotateAroundCenter(basePoint);
             }
         }
 
@@ -149,11 +176,32 @@ namespace Lab1_OZR1.Movement
         {
             get
             {
+                Point2D[] vertices =
+                {
+            TopLeft,
+            TopRight,
+            BottomRight,
+            BottomLeft
+        };
+
+                double minX = vertices[0].X;
+                double maxX = vertices[0].X;
+                double minY = vertices[0].Y;
+                double maxY = vertices[0].Y;
+
+                for (int i = 1; i < vertices.Length; i++)
+                {
+                    if (vertices[i].X < minX) minX = vertices[i].X;
+                    if (vertices[i].X > maxX) maxX = vertices[i].X;
+                    if (vertices[i].Y < minY) minY = vertices[i].Y;
+                    if (vertices[i].Y > maxY) maxY = vertices[i].Y;
+                }
+
                 return new Rectangle2D(
-                    _centerX - TopWidth / 2.0,
-                    _centerY - Height / 2.0,
-                    TopWidth,
-                    Height
+                    minX,
+                    minY,
+                    maxX - minX,
+                    maxY - minY
                 );
             }
         }
@@ -181,6 +229,8 @@ namespace Lab1_OZR1.Movement
         {
             _centerX += Velocity.X;
             _centerY += Velocity.Y;
+
+            Rotate(AngularVelocity);
         }
 
         /// <summary>
@@ -248,57 +298,56 @@ namespace Lab1_OZR1.Movement
 
             Rectangle2D bounds = BoundingRectangle;
 
-            // --------------------------------------------------------
-            // Выход через левую границу.
-            // Фигура появляется справа.
-            // --------------------------------------------------------
-
             if (bounds.Right < area.Left)
             {
-                _centerX = area.Right + TopWidth / 2.0;
-
+                _centerX = area.Right - (bounds.Left - _centerX);
                 wrapped = true;
             }
-
-            // --------------------------------------------------------
-            // Выход через правую границу.
-            // Фигура появляется слева.
-            // --------------------------------------------------------
-
             else if (bounds.Left > area.Right)
             {
-                _centerX = area.Left - TopWidth / 2.0;
-
+                _centerX = area.Left - (bounds.Right - _centerX);
                 wrapped = true;
             }
 
             bounds = BoundingRectangle;
 
-            // --------------------------------------------------------
-            // Выход через верхнюю границу.
-            // Фигура появляется снизу.
-            // --------------------------------------------------------
-
             if (bounds.Bottom < area.Top)
             {
-                _centerY = area.Bottom + Height / 2.0;
-
+                _centerY = area.Bottom - (bounds.Top - _centerY);
                 wrapped = true;
             }
-
-            // --------------------------------------------------------
-            // Выход через нижнюю границу.
-            // Фигура появляется сверху.
-            // --------------------------------------------------------
-
             else if (bounds.Top > area.Bottom)
             {
-                _centerY = area.Top - Height / 2.0;
-
+                _centerY = area.Top - (bounds.Bottom - _centerY);
                 wrapped = true;
             }
 
             return wrapped;
+        }
+
+        public void SetAngularVelocity(double angularVelocity)
+        {
+            AngularVelocity = angularVelocity;
+        }
+
+        public void Rotate(double angleRadians)
+        {
+            _rotationAngle += angleRadians;
+
+            while (_rotationAngle > Math.PI)
+            {
+                _rotationAngle -= 2.0 * Math.PI;
+            }
+
+            while (_rotationAngle < -Math.PI)
+            {
+                _rotationAngle += 2.0 * Math.PI;
+            }
+        }
+
+        public void RotateDegrees(double angleDegrees)
+        {
+            Rotate(angleDegrees * Math.PI / 180.0);
         }
 
         // ============================================================

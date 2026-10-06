@@ -14,6 +14,8 @@ namespace Lab1_OZR1
         private MovingTrapezoid _trapezoid;
         private Rectangle2D _area;
 
+        private double _prevAngle;
+
         private double _prevCenterX;
         private double _prevCenterY;
 
@@ -46,11 +48,13 @@ namespace Lab1_OZR1
                 topWidth: 200,
                 bottomWidth: 100,
                 height: 120,
-                velocity: new Vector2D(3, 2)
+                velocity: new Vector2D(3, 2),
+                angularVelocity: 0.03   // радиан за шаг
             );
 
             _prevCenterX = _trapezoid.CenterX;
             _prevCenterY = _trapezoid.CenterY;
+            _prevAngle = _trapezoid.RotationAngle;
 
             _buffer = new Bitmap(ClientSize.Width, ClientSize.Height);
             _bufferGraphics = Graphics.FromImage(_buffer);
@@ -90,6 +94,7 @@ namespace Lab1_OZR1
         {
             _prevCenterX = _trapezoid.CenterX;
             _prevCenterY = _trapezoid.CenterY;
+            _prevAngle = _trapezoid.RotationAngle;
 
             _trapezoid.Update(_area);
 
@@ -106,16 +111,18 @@ namespace Lab1_OZR1
                 _bufferGraphics,
                 _prevCenterX, _prevCenterY,
                 _trapezoid.TopWidth, _trapezoid.BottomWidth, _trapezoid.Height,
-                erase: true);
+                _prevAngle,
+                erase: true
+            );
 
             DrawBackground(_bufferGraphics, _paintedAngle, erase: true);
-
             DrawBackground(_bufferGraphics, _angle, erase: false);
 
             DrawTrapezoidShape(
                 _bufferGraphics,
                 _trapezoid.CenterX, _trapezoid.CenterY,
                 _trapezoid.TopWidth, _trapezoid.BottomWidth, _trapezoid.Height,
+                _trapezoid.RotationAngle,
                 erase: false);
 
             // 5. Копируем задний буфер на экран
@@ -170,24 +177,40 @@ namespace Lab1_OZR1
         }
 
         private void DrawTrapezoidShape
-        (
-            Graphics g,
-            double centerX, double centerY,
-            double topWidth, double bottomWidth, double height,
-            bool erase
-        )
+(
+    Graphics g,
+    double centerX, double centerY,
+    double topWidth, double bottomWidth, double height,
+    double rotationAngle,
+    bool erase
+)
         {
-            // Вершины
-            double tlX = centerX - topWidth / 2.0;
-            double tlY = centerY - height / 2.0;
-            double trX = centerX + topWidth / 2.0;
-            double trY = centerY - height / 2.0;
-            double blX = centerX - bottomWidth / 2.0;
-            double blY = centerY + height / 2.0;
-            double brX = centerX + bottomWidth / 2.0;
-            double brY = centerY + height / 2.0;
+            float cx = (float)centerX;
+            float cy = (float)centerY;
 
-            // Цвета и толщина пера
+            double left = centerX - topWidth / 2.0;
+            double right = centerX + topWidth / 2.0;
+            double top = centerY - height / 2.0;
+            double bottom = centerY + height / 2.0;
+            double blX = centerX - bottomWidth / 2.0;
+            double brX = centerX + bottomWidth / 2.0;
+
+            // Вершины трапеции
+            PointF tl = RotatePoint((float)left, (float)top, cx, cy, rotationAngle);
+            PointF tr = RotatePoint((float)right, (float)top, cx, cy, rotationAngle);
+            PointF bl = RotatePoint((float)blX, (float)bottom, cx, cy, rotationAngle);
+            PointF br = RotatePoint((float)brX, (float)bottom, cx, cy, rotationAngle);
+
+            // Вспомогательные точки
+            PointF blTop = RotatePoint((float)blX, (float)top, cx, cy, rotationAngle);
+            PointF brTop = RotatePoint((float)brX, (float)top, cx, cy, rotationAngle);
+
+            // Локальный габаритный прямоугольник
+            PointF rectTl = RotatePoint((float)left, (float)top, cx, cy, rotationAngle);
+            PointF rectTr = RotatePoint((float)right, (float)top, cx, cy, rotationAngle);
+            PointF rectBr = RotatePoint((float)right, (float)bottom, cx, cy, rotationAngle);
+            PointF rectBl = RotatePoint((float)left, (float)bottom, cx, cy, rotationAngle);
+
             Color fillRect = Color.White;
             Color leftColor = Color.White;
             Color midColor = Color.White;
@@ -209,51 +232,23 @@ namespace Lab1_OZR1
             using (Brush bRight = new SolidBrush(rightColor))
             using (Pen pen = new Pen(outline, penWidth))
             {
-                double left = centerX - topWidth / 2.0;
-                double top = centerY - height / 2.0;
-                double width = topWidth;
-                double rectH = height;
+                PointF[] rectPts = { rectTl, rectTr, rectBr, rectBl };
+                g.FillPolygon(bRect, rectPts);
 
-                g.FillRectangle(bRect,
-                    (float)left, (float)top,
-                    (float)width, (float)rectH);
-
-                PointF[] leftPts =
-                {
-                    new PointF((float)tlX, (float)tlY),
-                    new PointF((float)blX, (float)blY),
-                    new PointF((float)blX, (float)tlY)
-                };
+                PointF[] leftPts = { tl, bl, blTop };
                 g.FillPolygon(bLeft, leftPts);
 
-                PointF[] midPts =
-                {
-                    new PointF((float)blX, (float)tlY),
-                    new PointF((float)brX, (float)tlY),
-                    new PointF((float)brX, (float)blY),
-                    new PointF((float)blX, (float)blY)
-                };
+                PointF[] midPts = { blTop, brTop, br, bl };
                 g.FillPolygon(bMid, midPts);
 
-                PointF[] rightPts =
-                {
-                    new PointF((float)trX, (float)trY),
-                    new PointF((float)brX, (float)brY),
-                    new PointF((float)brX, (float)trY)
-                };
+                PointF[] rightPts = { tr, br, brTop };
                 g.FillPolygon(bRight, rightPts);
 
-                PointF[] trapezoidPts =
-                {
-                    new PointF((float)tlX, (float)tlY),
-                    new PointF((float)trX, (float)trY),
-                    new PointF((float)brX, (float)brY),
-                    new PointF((float)blX, (float)blY)
-                };
+                PointF[] trapezoidPts = { tl, tr, br, bl };
                 g.DrawPolygon(pen, trapezoidPts);
 
-                g.DrawLine(pen, (float)blX, (float)blY, (float)blX, (float)tlY);
-                g.DrawLine(pen, (float)brX, (float)brY, (float)brX, (float)trY);
+                g.DrawLine(pen, bl, blTop);
+                g.DrawLine(pen, br, brTop);
             }
         }
 
