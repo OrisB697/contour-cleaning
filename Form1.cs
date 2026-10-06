@@ -2,15 +2,12 @@
 using Lab1_OZR1.Movement;
 using System;
 using System.Drawing;
-using System.Net.NetworkInformation;
-using System.Security.Policy;
 using System.Windows.Forms;
 
 namespace Lab1_OZR1
 {
     public partial class Form1 : Form
     {
-
         private MovingTrapezoid _trapezoid;
         private Rectangle2D _area;
 
@@ -34,7 +31,7 @@ namespace Lab1_OZR1
             this.ClientSize = new Size(900, 700);
             this.Text = "ЛР1 — КВ2 — контурная очистка";
 
-            // Двойная буферизация 
+            // Двойная буферизация
             this.DoubleBuffered = true;
 
             // Область движения
@@ -102,6 +99,13 @@ namespace Lab1_OZR1
         {
             base.OnPaint(e);
 
+            DrawCircumscribedCircle(
+                _bufferGraphics,
+                _prevCenterX,
+                _prevCenterY,
+                _trapezoid.Radius,
+                erase: true);
+
             DrawTrapezoidShape(
                 _bufferGraphics,
                 _prevCenterX, _prevCenterY,
@@ -112,13 +116,19 @@ namespace Lab1_OZR1
 
             DrawBackground(_bufferGraphics, _angle, erase: false);
 
+            DrawCircumscribedCircle(
+                _bufferGraphics,
+                _trapezoid.CenterX,
+                _trapezoid.CenterY,
+                _trapezoid.Radius,
+                erase: false);
+
             DrawTrapezoidShape(
                 _bufferGraphics,
                 _trapezoid.CenterX, _trapezoid.CenterY,
                 _trapezoid.TopWidth, _trapezoid.BottomWidth, _trapezoid.Height,
                 erase: false);
 
-            // 5. Копируем задний буфер на экран
             e.Graphics.DrawImageUnscaled(_buffer, 0, 0);
 
             _paintedAngle = _angle;
@@ -139,7 +149,7 @@ namespace Lab1_OZR1
         {
             Color fillColor = Color.White;
             Color penColor = erase ? Color.White : Color.Black;
-            int penWidth = erase ? 4 : 2;   // Делаем толще чтобы точно все затереть
+            int penWidth = erase ? 4 : 2;   // толще — чтобы точно затереть
 
             using (Brush brush = new SolidBrush(fillColor))
             using (Pen pen = new Pen(penColor, penWidth))
@@ -149,7 +159,7 @@ namespace Lab1_OZR1
 
                 int s = 50;
 
-                for(int colRomb = 0; colRomb < RINGS; colRomb++)
+                for (int colRomb = 0; colRomb < RINGS; colRomb++)
                 {
                     PointF[] romb = new PointF[4];
                     romb[0] = new PointF((float)(cx), (float)(cy - s));
@@ -166,6 +176,26 @@ namespace Lab1_OZR1
 
                     g.DrawPolygon(pen, romb);
                 }
+            }
+        }
+
+        private void DrawCircumscribedCircle(
+            Graphics g,
+            double centerX,
+            double centerY,
+            double radius,
+            bool erase)
+        {
+            float x = (float)(centerX - radius);
+            float y = (float)(centerY - radius);
+            float d = (float)(2 * radius);
+
+            Color color = erase ? Color.White : Color.Red;
+            int penWidth = erase ? 4 : 2;
+
+            using (Pen pen = new Pen(color, penWidth))
+            {
+                g.DrawEllipse(pen, x, y, d, d);
             }
         }
 

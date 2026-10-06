@@ -12,7 +12,7 @@ namespace Lab1_OZR1.Tests
 
             TestTrapezoidMovement();
 
-            TestBoundingRectangle();
+            TestCircumscribedCircle();
 
             TestHorizontalWrap();
 
@@ -77,7 +77,7 @@ namespace Lab1_OZR1.Tests
             Console.WriteLine("[OK] Движение трапеции");
         }
 
-        private static void TestBoundingRectangle()
+        private static void TestCircumscribedCircle()
         {
             MovingTrapezoid trapezoid =
                 new MovingTrapezoid(
@@ -89,35 +89,53 @@ namespace Lab1_OZR1.Tests
                     new Vector2D(0, 0)
                 );
 
-            Rectangle2D bounds =
-                trapezoid.BoundingRectangle;
+            Circle2D circle = trapezoid.CircumscribedCircle;
 
+            // R = sqrt(20^2 + 15^2) = 25
             AssertEqual(
-                bounds.Left,
-                80,
-                "Левая граница"
+                circle.CenterX,
+                100,
+                "Центр окружности X"
             );
 
             AssertEqual(
-                bounds.Right,
-                120,
-                "Правая граница"
+                circle.CenterY,
+                100,
+                "Центр окружности Y"
             );
 
             AssertEqual(
-                bounds.Top,
-                85,
-                "Верхняя граница"
+                circle.Radius,
+                25,
+                "Радиус описанной окружности"
             );
 
             AssertEqual(
-                bounds.Bottom,
-                115,
-                "Нижняя граница"
+                circle.Left,
+                75,
+                "Левая точка окружности"
+            );
+
+            AssertEqual(
+                circle.Right,
+                125,
+                "Правая точка окружности"
+            );
+
+            AssertEqual(
+                circle.Top,
+                75,
+                "Верхняя точка окружности"
+            );
+
+            AssertEqual(
+                circle.Bottom,
+                125,
+                "Нижняя точка окружности"
             );
 
             Console.WriteLine(
-                "[OK] Габаритный прямоугольник"
+                "[OK] Описанная окружность"
             );
         }
 
@@ -138,10 +156,9 @@ namespace Lab1_OZR1.Tests
 
             trapezoid.Update(area);
 
-            Rectangle2D bounds =
-                trapezoid.BoundingRectangle;
+            Circle2D circle = trapezoid.CircumscribedCircle;
 
-            if (bounds.Right < area.Left)
+            if (circle.Right < area.Left)
             {
                 throw new Exception(
                     "Фигура не была перенесена через левую границу."
@@ -170,10 +187,9 @@ namespace Lab1_OZR1.Tests
 
             trapezoid.Update(area);
 
-            Rectangle2D bounds =
-                trapezoid.BoundingRectangle;
+            Circle2D circle = trapezoid.CircumscribedCircle;
 
-            if (bounds.Bottom < area.Top)
+            if (circle.Bottom < area.Top)
             {
                 throw new Exception(
                     "Фигура не была перенесена через верхнюю границу."

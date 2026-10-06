@@ -6,6 +6,7 @@ namespace Lab1_OZR1.Movement
     /// <summary>
     /// Движущаяся равнобедренная перевёрнутая трапеция.
     ///
+    /// Габаритом фигуры является описанная окружность.
     /// Класс содержит математическую и программную логику
     /// перемещения фигуры и обработки выхода за границы
     /// области движения.
@@ -139,22 +140,36 @@ namespace Lab1_OZR1.Movement
         }
 
         // ============================================================
-        // ГАБАРИТНЫЙ ПРЯМОУГОЛЬНИК
+        // ГАБАРИТНАЯ ОКРУЖНОСТЬ
         // ============================================================
 
         /// <summary>
-        /// Ортогональный прямоугольник, описывающий габариты фигуры.
+        /// Радиус окружности, описанной вокруг трапеции.
+        ///
+        /// Самая удалённая вершина — верхняя (TopWidth >= BottomWidth):
+        ///   R = sqrt( (TopWidth/2)^2 + (Height/2)^2 )
         /// </summary>
-        public Rectangle2D BoundingRectangle
+        public double Radius
         {
             get
             {
-                return new Rectangle2D(
-                    _centerX - TopWidth / 2.0,
-                    _centerY - Height / 2.0,
-                    TopWidth,
-                    Height
-                );
+                double halfTop = TopWidth / 2.0;
+                double halfHeight = Height / 2.0;
+
+                return Math.Sqrt(
+                    halfTop * halfTop +
+                    halfHeight * halfHeight);
+            }
+        }
+
+        /// <summary>
+        /// Описанная окружность как габарит фигуры.
+        /// </summary>
+        public Circle2D CircumscribedCircle
+        {
+            get
+            {
+                return new Circle2D(_centerX, _centerY, Radius);
             }
         }
 
@@ -204,31 +219,31 @@ namespace Lab1_OZR1.Movement
         // ============================================================
 
         /// <summary>
-        /// Проверяет, полностью ли фигура находится внутри
-        /// области движения.
+        /// Проверяет, полностью ли описанная окружность
+        /// находится внутри области движения.
         /// </summary>
         public bool IsInside(Rectangle2D area)
         {
-            Rectangle2D bounds = BoundingRectangle;
+            Circle2D circle = CircumscribedCircle;
 
-            return bounds.Left >= area.Left &&
-                   bounds.Right <= area.Right &&
-                   bounds.Top >= area.Top &&
-                   bounds.Bottom <= area.Bottom;
+            return circle.Left >= area.Left &&
+                   circle.Right <= area.Right &&
+                   circle.Top >= area.Top &&
+                   circle.Bottom <= area.Bottom;
         }
 
         /// <summary>
-        /// Проверяет, находится ли фигура полностью за пределами
-        /// области движения.
+        /// Проверяет, полностью ли описанная окружность
+        /// находится за пределами области движения.
         /// </summary>
         public bool IsOutside(Rectangle2D area)
         {
-            Rectangle2D bounds = BoundingRectangle;
+            Circle2D circle = CircumscribedCircle;
 
-            return bounds.Right < area.Left ||
-                   bounds.Left > area.Right ||
-                   bounds.Bottom < area.Top ||
-                   bounds.Top > area.Bottom;
+            return circle.Right < area.Left ||
+                   circle.Left > area.Right ||
+                   circle.Bottom < area.Top ||
+                   circle.Top > area.Bottom;
         }
 
         // ============================================================
@@ -237,7 +252,7 @@ namespace Lab1_OZR1.Movement
 
         /// <summary>
         /// Переносит фигуру на противоположную сторону области,
-        /// если её габаритный прямоугольник полностью вышел
+        /// если её описанная окружность полностью вышла
         /// за соответствующую границу.
         ///
         /// Возвращает true, если был выполнен перенос.
@@ -246,17 +261,17 @@ namespace Lab1_OZR1.Movement
         {
             bool wrapped = false;
 
-            Rectangle2D bounds = BoundingRectangle;
+            double r = Radius;
+            Circle2D circle = CircumscribedCircle;
 
             // --------------------------------------------------------
             // Выход через левую границу.
             // Фигура появляется справа.
             // --------------------------------------------------------
 
-            if (bounds.Right < area.Left)
+            if (circle.Right < area.Left)
             {
-                _centerX = area.Right + TopWidth / 2.0;
-
+                _centerX = area.Right + r;
                 wrapped = true;
             }
 
@@ -265,24 +280,23 @@ namespace Lab1_OZR1.Movement
             // Фигура появляется слева.
             // --------------------------------------------------------
 
-            else if (bounds.Left > area.Right)
+            else if (circle.Left > area.Right)
             {
-                _centerX = area.Left - TopWidth / 2.0;
-
+                _centerX = area.Left - r;
                 wrapped = true;
             }
 
-            bounds = BoundingRectangle;
+            // Пересчитываем окружность после возможного сдвига по X
+            circle = CircumscribedCircle;
 
             // --------------------------------------------------------
             // Выход через верхнюю границу.
             // Фигура появляется снизу.
             // --------------------------------------------------------
 
-            if (bounds.Bottom < area.Top)
+            if (circle.Bottom < area.Top)
             {
-                _centerY = area.Bottom + Height / 2.0;
-
+                _centerY = area.Bottom + r;
                 wrapped = true;
             }
 
@@ -291,10 +305,9 @@ namespace Lab1_OZR1.Movement
             // Фигура появляется сверху.
             // --------------------------------------------------------
 
-            else if (bounds.Top > area.Bottom)
+            else if (circle.Top > area.Bottom)
             {
-                _centerY = area.Top - Height / 2.0;
-
+                _centerY = area.Top - r;
                 wrapped = true;
             }
 
@@ -309,7 +322,7 @@ namespace Lab1_OZR1.Movement
         /// Выполняет один полный шаг алгоритма:
         ///
         /// 1. перемещение;
-        /// 2. получение габаритов;
+        /// 2. получение габаритов (описанной окружности);
         /// 3. проверка выхода;
         /// 4. перенос на противоположную сторону.
         /// </summary>

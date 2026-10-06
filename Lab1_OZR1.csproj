@@ -52,6 +52,7 @@
     <Compile Include="Form1.Designer.cs">
       <DependentUpon>Form1.cs</DependentUpon>
     </Compile>
+    <Compile Include="Geometry\Circle2D.cs" />
     <Compile Include="Geometry\Point2D.cs" />
     <Compile Include="Geometry\Rectangle2D.cs" />
     <Compile Include="Geometry\TrapezoidGeometry.cs" />
