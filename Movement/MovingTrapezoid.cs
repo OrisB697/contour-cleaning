@@ -6,9 +6,10 @@ namespace Lab1_OZR1.Movement
     /// <summary>
     /// Движущаяся равнобедренная перевёрнутая трапеция.
     ///
-    /// Класс содержит математическую и программную логику
-    /// перемещения фигуры и обработки выхода за границы
-    /// области движения.
+    /// Движение происходит с учётом силы тяготения.
+    /// При столкновении с границами области выполняется
+    /// отскок по закону отражения; потеря энергии при ударе
+    /// описывается коэффициентом восстановления.
     /// </summary>
     public class MovingTrapezoid
     {
@@ -47,9 +48,35 @@ namespace Lab1_OZR1.Movement
         public double Height { get; }
 
         /// <summary>
-        /// Направляющий вектор движения.
+        /// Текущий вектор скорости.
         /// </summary>
         public Vector2D Velocity { get; private set; }
+
+        /// <summary>
+        /// Масса фигуры.
+        /// </summary>
+        public double Mass { get; }
+
+        /// <summary>
+        /// Ускорение свободного падения.
+        /// Направлено вертикально вниз, поэтому положительно по Y.
+        /// </summary>
+        public double Gravity { get; }
+
+        /// <summary>
+        /// Коэффициент восстановления при отскоке (0..1).
+        ///
+        /// 1.0 — абсолютно упругий удар: энергия сохраняется,
+        ///       гравитация полностью компенсирует импульс отскока.
+        /// 0.0 — удар полностью гасится.
+        /// </summary>
+        public double Restitution { get; }
+
+        /// <summary>
+        /// Жёсткий предел модуля скорости.
+        /// Служит страховкой от накопления численной ошибки.
+        /// </summary>
+        public double MaxSpeed { get; }
 
         public MovingTrapezoid(
             double centerX,
@@ -57,7 +84,11 @@ namespace Lab1_OZR1.Movement
             double topWidth,
             double bottomWidth,
             double height,
-            Vector2D velocity)
+            Vector2D velocity,
+            double mass = 1.0,
+            double gravity = 0.2,
+            double restitution = 1.0,
+            double maxSpeed = 100.0)
         {
             if (topWidth <= 0)
             {
@@ -80,6 +111,21 @@ namespace Lab1_OZR1.Movement
                 throw new ArgumentOutOfRangeException(nameof(height));
             }
 
+            if (mass <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(mass));
+            }
+
+            if (restitution < 0.0 || restitution > 1.0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(restitution));
+            }
+
+            if (maxSpeed <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(maxSpeed));
+            }
+
             _centerX = centerX;
             _centerY = centerY;
 
@@ -88,6 +134,11 @@ namespace Lab1_OZR1.Movement
             Height = height;
 
             Velocity = velocity;
+
+            Mass = mass;
+            Gravity = gravity;
+            Restitution = restitution;
+            MaxSpeed = maxSpeed;
         }
 
         // ============================================================
@@ -172,13 +223,17 @@ namespace Lab1_OZR1.Movement
         // ============================================================
 
         /// <summary>
-        /// Выполняет один шаг прямолинейного движения.
+        /// Выполняет один шаг движения с учётом гравитации.
         ///
-        /// x(k+1) = x(k) + vx
-        /// y(k+1) = y(k) + vy
+        /// v_y(k+1) = v_y(k) + g
+        /// x(k+1)   = x(k) + v_x(k+1)
+        /// y(k+1)   = y(k) + v_y(k+1)
         /// </summary>
         public void Move()
         {
+            // Гравитация направлена вниз => увеличивает Y-скорость.
+            Velocity = Velocity + new Vector2D(0, Gravity);
+
             _centerX += Velocity.X;
             _centerY += Velocity.Y;
         }
@@ -232,73 +287,107 @@ namespace Lab1_OZR1.Movement
         }
 
         // ============================================================
-        // ПЕРЕНОС ЧЕРЕЗ ГРАНИЦУ
+        // ОТСКОК ОТ ГРАНИЦ
         // ============================================================
 
         /// <summary>
-        /// Переносит фигуру на противоположную сторону области,
-        /// если её габаритный прямоугольник полностью вышел
-        /// за соответствующую границу.
+        /// Обрабатывает столкновение с границами области.
         ///
-        /// Возвращает true, если был выполнен перенос.
+        /// При выходе за границу:
+        /// 1. фигура возвращается внутрь области;
+        /// 2. нормальная составляющая скорости отражается
+        ///    и умножается на коэффициент восстановления.
+        ///
+        /// Дополнительный импульс не прибавляется: импульс отскока
+        /// компенсируется гравитацией на участке подъёма, поэтому
+        /// скорость фигуры не растёт бесконечно.
+        ///
+        /// Возвращает true, если был хотя бы один отскок.
         /// </summary>
-        public bool CheckAndWrap(Rectangle2D area)
+        private bool HandleBounce(Rectangle2D area)
         {
-            bool wrapped = false;
+            bool bounced = false;
 
             Rectangle2D bounds = BoundingRectangle;
 
             // --------------------------------------------------------
-            // Выход через левую границу.
-            // Фигура появляется справа.
+            // Левая граница.
+            // Нормаль направлена вправо: (1; 0).
             // --------------------------------------------------------
-
-            if (bounds.Right < area.Left)
+            if (bounds.Left < area.Left)
             {
-                _centerX = area.Right + TopWidth / 2.0;
+                _centerX += area.Left - bounds.Left;
 
-                wrapped = true;
+                Velocity = new Vector2D(
+                    -Velocity.X * Restitution,
+                    Velocity.Y
+                );
+
+                bounced = true;
             }
-
             // --------------------------------------------------------
-            // Выход через правую границу.
-            // Фигура появляется слева.
+            // Правая граница.
+            // Нормаль направлена влево: (-1; 0).
             // --------------------------------------------------------
-
-            else if (bounds.Left > area.Right)
+            else if (bounds.Right > area.Right)
             {
-                _centerX = area.Left - TopWidth / 2.0;
+                _centerX += area.Right - bounds.Right;
 
-                wrapped = true;
+                Velocity = new Vector2D(
+                    -Velocity.X * Restitution,
+                    Velocity.Y
+                );
+
+                bounced = true;
             }
 
             bounds = BoundingRectangle;
 
             // --------------------------------------------------------
-            // Выход через верхнюю границу.
-            // Фигура появляется снизу.
+            // Верхняя граница.
+            // Нормаль направлена вниз: (0; 1).
             // --------------------------------------------------------
-
-            if (bounds.Bottom < area.Top)
+            if (bounds.Top < area.Top)
             {
-                _centerY = area.Bottom + Height / 2.0;
+                _centerY += area.Top - bounds.Top;
 
-                wrapped = true;
+                Velocity = new Vector2D(
+                    Velocity.X,
+                    -Velocity.Y * Restitution
+                );
+
+                bounced = true;
+            }
+            // --------------------------------------------------------
+            // Нижняя граница.
+            // Нормаль направлена вверх: (0; -1).
+            // --------------------------------------------------------
+            else if (bounds.Bottom > area.Bottom)
+            {
+                _centerY += area.Bottom - bounds.Bottom;
+
+                Velocity = new Vector2D(
+                    Velocity.X,
+                    -Velocity.Y * Restitution
+                );
+
+                bounced = true;
             }
 
             // --------------------------------------------------------
-            // Выход через нижнюю границу.
-            // Фигура появляется сверху.
+            // Страховка: жёсткий предел модуля скорости.
             // --------------------------------------------------------
-
-            else if (bounds.Top > area.Bottom)
+            if (Velocity.Length > MaxSpeed)
             {
-                _centerY = area.Top - Height / 2.0;
+                double k = MaxSpeed / Velocity.Length;
 
-                wrapped = true;
+                Velocity = new Vector2D(
+                    Velocity.X * k,
+                    Velocity.Y * k
+                );
             }
 
-            return wrapped;
+            return bounced;
         }
 
         // ============================================================
@@ -308,16 +397,15 @@ namespace Lab1_OZR1.Movement
         /// <summary>
         /// Выполняет один полный шаг алгоритма:
         ///
-        /// 1. перемещение;
-        /// 2. получение габаритов;
-        /// 3. проверка выхода;
-        /// 4. перенос на противоположную сторону.
+        /// 1. применяет гравитацию и перемещает фигуру;
+        /// 2. проверяет столкновения с границами;
+        /// 3. при необходимости выполняет отскок.
         /// </summary>
         public bool Update(Rectangle2D area)
         {
             Move();
 
-            return CheckAndWrap(area);
+            return HandleBounce(area);
         }
     }
 }

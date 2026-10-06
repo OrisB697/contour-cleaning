@@ -2,15 +2,12 @@
 using Lab1_OZR1.Movement;
 using System;
 using System.Drawing;
-using System.Net.NetworkInformation;
-using System.Security.Policy;
 using System.Windows.Forms;
 
 namespace Lab1_OZR1
 {
     public partial class Form1 : Form
     {
-
         private MovingTrapezoid _trapezoid;
         private Rectangle2D _area;
 
@@ -24,7 +21,6 @@ namespace Lab1_OZR1
         private Graphics _bufferGraphics;
 
         private const int RINGS = 17;
-        private const int PER_RING = 8;
         private const double PI = Math.PI;
 
         public Form1()
@@ -46,7 +42,11 @@ namespace Lab1_OZR1
                 topWidth: 200,
                 bottomWidth: 100,
                 height: 120,
-                velocity: new Vector2D(3, 2)
+                velocity: new Vector2D(4, 0),
+                mass: 1.0,
+                gravity: 0.25,
+                restitution: 1.0,   // 1.0 — импульс полностью компенсируется гравитацией
+                maxSpeed: 60.0      // страховочный предел модуля скорости
             );
 
             _prevCenterX = _trapezoid.CenterX;
@@ -118,7 +118,7 @@ namespace Lab1_OZR1
                 _trapezoid.TopWidth, _trapezoid.BottomWidth, _trapezoid.Height,
                 erase: false);
 
-            // 5. Копируем задний буфер на экран
+            // Копируем задний буфер на экран
             e.Graphics.DrawImageUnscaled(_buffer, 0, 0);
 
             _paintedAngle = _angle;
@@ -139,7 +139,7 @@ namespace Lab1_OZR1
         {
             Color fillColor = Color.White;
             Color penColor = erase ? Color.White : Color.Black;
-            int penWidth = erase ? 4 : 2;   // Делаем толще чтобы точно все затереть
+            int penWidth = erase ? 4 : 2;
 
             using (Brush brush = new SolidBrush(fillColor))
             using (Pen pen = new Pen(penColor, penWidth))
@@ -149,7 +149,7 @@ namespace Lab1_OZR1
 
                 int s = 50;
 
-                for(int colRomb = 0; colRomb < RINGS; colRomb++)
+                for (int colRomb = 0; colRomb < RINGS; colRomb++)
                 {
                     PointF[] romb = new PointF[4];
                     romb[0] = new PointF((float)(cx), (float)(cy - s));
@@ -177,7 +177,6 @@ namespace Lab1_OZR1
             bool erase
         )
         {
-            // Вершины
             double tlX = centerX - topWidth / 2.0;
             double tlY = centerY - height / 2.0;
             double trX = centerX + topWidth / 2.0;
@@ -187,7 +186,6 @@ namespace Lab1_OZR1
             double brX = centerX + bottomWidth / 2.0;
             double brY = centerY + height / 2.0;
 
-            // Цвета и толщина пера
             Color fillRect = Color.White;
             Color leftColor = Color.White;
             Color midColor = Color.White;
