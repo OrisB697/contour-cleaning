@@ -11,11 +11,6 @@ namespace Lab1_OZR1
         private MovingTrapezoid _trapezoid;
         private Rectangle2D _area;
 
-        private double _prevCenterX;
-        private double _prevCenterY;
-        private double _prevRotationAngle;
-        private double _prevScale;
-
         private Timer _timer;
         private double _angle;
         private double _paintedAngle;
@@ -39,6 +34,8 @@ namespace Lab1_OZR1
 
             _area = new Rectangle2D(0, 0, ClientSize.Width, ClientSize.Height);
 
+            
+
             _trapezoid = new MovingTrapezoid(
                 centerX: 450,
                 centerY: 350,
@@ -47,11 +44,6 @@ namespace Lab1_OZR1
                 height: 120,
                 velocity: new Vector2D(3, 2)
             );
-
-            _prevCenterX = _trapezoid.CenterX;
-            _prevCenterY = _trapezoid.CenterY;
-            _prevRotationAngle = _trapezoid.RotationAngle;
-            _prevScale = _trapezoid.Scale;
 
             _buffer = new Bitmap(ClientSize.Width, ClientSize.Height);
             _bufferGraphics = Graphics.FromImage(_buffer);
@@ -89,15 +81,8 @@ namespace Lab1_OZR1
 
         private void Timer_Tick(object sender, EventArgs e)
         {
-            _prevCenterX = _trapezoid.CenterX;
-            _prevCenterY = _trapezoid.CenterY;
-            _prevRotationAngle = _trapezoid.RotationAngle;
-            _prevScale = _trapezoid.Scale;
-
             _trapezoid.Update(_area);
-
             _angle += 0.02;
-
             Invalidate();
         }
 
@@ -141,15 +126,7 @@ namespace Lab1_OZR1
         {
             base.OnPaint(e);
 
-            DrawTrapezoidShape(
-                _bufferGraphics,
-                _prevCenterX, _prevCenterY,
-                _trapezoid.TopWidth, _trapezoid.BottomWidth, _trapezoid.Height,
-                _prevRotationAngle, _prevScale,
-                erase: true);
-
             DrawBackground(_bufferGraphics, _paintedAngle, erase: true);
-
             DrawBackground(_bufferGraphics, _angle, erase: false);
 
             DrawTrapezoidShape(
