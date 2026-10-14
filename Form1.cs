@@ -2,15 +2,14 @@
 using Lab1_OZR1.Movement;
 using System;
 using System.Drawing;
-using System.Net.NetworkInformation;
-using System.Security.Policy;
+using System.Drawing.Drawing2D;
+using System.IO;
 using System.Windows.Forms;
 
 namespace Lab1_OZR1
 {
     public partial class Form1 : Form
     {
-
         private MovingTrapezoid _trapezoid;
         private Rectangle2D _area;
 
@@ -18,14 +17,22 @@ namespace Lab1_OZR1
         private double _prevCenterY;
 
         private Timer _timer;
-        private double _angle;         // текущий угол поворота фона
-        private double _paintedAngle;  // угол отрисованный
-        private Bitmap _buffer;        // задний буфер
+        private double _angle;
+        private double _paintedAngle;
+        private Bitmap _buffer;
         private Graphics _bufferGraphics;
+
+        private Bitmap _backgroundImage;
+        private Bitmap _stretchedBackground;
 
         private const int RINGS = 17;
         private const int PER_RING = 8;
         private const double PI = Math.PI;
+
+        private const int ERASE_PEN_EXTRA = 2;
+
+        private const string BackgroundFileName =
+            "the-center-of-milky-way-galaxy-and-space-dust-in-the-universe-night-starry-sky-with-stars-photo.jpg";
 
         public Form1()
         {
@@ -34,10 +41,10 @@ namespace Lab1_OZR1
             this.ClientSize = new Size(900, 700);
             this.Text = "ЛР1 — КВ2 — контурная очистка";
 
-            // Двойная буферизация 
             this.DoubleBuffered = true;
 
-            // Область движения
+            _backgroundImage = LoadBackgroundImage();
+
             _area = new Rectangle2D(0, 0, ClientSize.Width, ClientSize.Height);
 
             _trapezoid = new MovingTrapezoid(
@@ -52,9 +59,7 @@ namespace Lab1_OZR1
             _prevCenterX = _trapezoid.CenterX;
             _prevCenterY = _trapezoid.CenterY;
 
-            _buffer = new Bitmap(ClientSize.Width, ClientSize.Height);
-            _bufferGraphics = Graphics.FromImage(_buffer);
-            ClearBuffer();
+            ResetBuffer();
 
             _timer = new Timer();
             _timer.Interval = 16;
@@ -64,9 +69,62 @@ namespace Lab1_OZR1
             this.Resize += Form1_Resize;
         }
 
-        private void ClearBuffer()
+        private Bitmap LoadBackgroundImage()
         {
-            _bufferGraphics.Clear(Color.White);
+            try
+            {
+                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                string path = Path.Combine(baseDir, "assets", BackgroundFileName);
+
+                if (File.Exists(path))
+                {
+                    using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read))
+                        return new Bitmap(fs);
+                }
+
+                string altPath = Path.Combine("assets", BackgroundFileName);
+                if (File.Exists(altPath))
+                {
+                    using (var fs = new FileStream(altPath, FileMode.Open, FileAccess.Read))
+                        return new Bitmap(fs);
+                }
+            }
+            catch
+            {
+            }
+
+            return null;
+        }
+
+        private void ResetBuffer()
+        {
+            _bufferGraphics?.Dispose();
+            _buffer?.Dispose();
+            _stretchedBackground?.Dispose();
+
+            _buffer = new Bitmap(ClientSize.Width, ClientSize.Height);
+            _bufferGraphics = Graphics.FromImage(_buffer);
+
+            if (_backgroundImage != null)
+            {
+                _stretchedBackground = new Bitmap(ClientSize.Width, ClientSize.Height);
+                using (var g = Graphics.FromImage(_stretchedBackground))
+                {
+                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    g.DrawImage(
+                        _backgroundImage,
+                        0, 0,
+                        _stretchedBackground.Width,
+                        _stretchedBackground.Height);
+                }
+
+                _bufferGraphics.DrawImageUnscaled(_stretchedBackground, 0, 0);
+            }
+            else
+            {
+                _stretchedBackground = null;
+                _bufferGraphics.Clear(Color.White);
+            }
         }
 
         private void Form1_Resize(object sender, EventArgs e)
@@ -76,12 +134,7 @@ namespace Lab1_OZR1
 
             _area = new Rectangle2D(0, 0, ClientSize.Width, ClientSize.Height);
 
-            _bufferGraphics?.Dispose();
-            _buffer?.Dispose();
-
-            _buffer = new Bitmap(ClientSize.Width, ClientSize.Height);
-            _bufferGraphics = Graphics.FromImage(_buffer);
-            ClearBuffer();
+            ResetBuffer();
 
             Invalidate();
         }
@@ -93,7 +146,7 @@ namespace Lab1_OZR1
 
             _trapezoid.Update(_area);
 
-            _angle += 0.02;
+            _angle = (_angle + 0.02) % (2 * PI);
 
             Invalidate();
         }
@@ -102,26 +155,183 @@ namespace Lab1_OZR1
         {
             base.OnPaint(e);
 
-            DrawTrapezoidShape(
+            EraseGrid(_bufferGraphics, _paintedAngle);
+
+            EraseTrapezoid(
                 _bufferGraphics,
                 _prevCenterX, _prevCenterY,
-                _trapezoid.TopWidth, _trapezoid.BottomWidth, _trapezoid.Height,
-                erase: true);
+                _trapezoid.TopWidth, _trapezoid.BottomWidth, _trapezoid.Height);
 
-            DrawBackground(_bufferGraphics, _paintedAngle, erase: true);
-
-            DrawBackground(_bufferGraphics, _angle, erase: false);
+            DrawGrid(_bufferGraphics, _angle);
 
             DrawTrapezoidShape(
                 _bufferGraphics,
                 _trapezoid.CenterX, _trapezoid.CenterY,
-                _trapezoid.TopWidth, _trapezoid.BottomWidth, _trapezoid.Height,
-                erase: false);
+                _trapezoid.TopWidth, _trapezoid.BottomWidth, _trapezoid.Height);
 
-            // 5. Копируем задний буфер на экран
             e.Graphics.DrawImageUnscaled(_buffer, 0, 0);
 
             _paintedAngle = _angle;
+        }
+
+        private void DrawRombs(Graphics g, Pen pen, double angle)
+        {
+            int cx = ClientSize.Width / 2;
+            int cy = ClientSize.Height / 2;
+
+            int s = 50;
+
+            for (int colRomb = 0; colRomb < RINGS; colRomb++)
+            {
+                double a = angle + colRomb * 3;
+
+                PointF[] romb = new PointF[4];
+                romb[0] = RotatePoint(cx, cy - s, cx, cy, a);
+                romb[1] = RotatePoint(cx + s, cy, cx, cy, a);
+                romb[2] = RotatePoint(cx, cy + s, cx, cy, a);
+                romb[3] = RotatePoint(cx - s, cy, cx, cy, a);
+
+                s += 20;
+
+                g.DrawPolygon(pen, romb);
+            }
+        }
+
+        private void EraseGrid(Graphics g, double angle)
+        {
+            if (_stretchedBackground != null)
+            {
+                using (var brush = new TextureBrush(_stretchedBackground, WrapMode.Tile))
+                using (var pen = new Pen(brush, 2 + ERASE_PEN_EXTRA))
+                {
+                    DrawRombs(g, pen, angle);
+                }
+            }
+            else
+            {
+                using (var pen = new Pen(Color.White, 2 + ERASE_PEN_EXTRA))
+                {
+                    DrawRombs(g, pen, angle);
+                }
+            }
+        }
+
+        private void DrawGrid(Graphics g, double angle)
+        {
+            using (var pen = new Pen(Color.Black, 2))
+            {
+                DrawRombs(g, pen, angle);
+            }
+        }
+
+        private void DrawTrapezoidCore(
+            Graphics g,
+            double centerX, double centerY,
+            double topWidth, double bottomWidth, double height,
+            Brush bRect, Brush bLeft, Brush bMid, Brush bRight, Pen pen)
+        {
+            double tlX = centerX - topWidth / 2.0;
+            double tlY = centerY - height / 2.0;
+            double trX = centerX + topWidth / 2.0;
+            double trY = centerY - height / 2.0;
+            double blX = centerX - bottomWidth / 2.0;
+            double blY = centerY + height / 2.0;
+            double brX = centerX + bottomWidth / 2.0;
+            double brY = centerY + height / 2.0;
+
+            double left = centerX - topWidth / 2.0;
+            double top = centerY - height / 2.0;
+
+            g.FillRectangle(bRect,
+                (float)left, (float)top,
+                (float)topWidth, (float)height);
+
+            PointF[] leftPts =
+            {
+                new PointF((float)tlX, (float)tlY),
+                new PointF((float)blX, (float)blY),
+                new PointF((float)blX, (float)tlY)
+            };
+            g.FillPolygon(bLeft, leftPts);
+
+            PointF[] midPts =
+            {
+                new PointF((float)blX, (float)tlY),
+                new PointF((float)brX, (float)tlY),
+                new PointF((float)brX, (float)blY),
+                new PointF((float)blX, (float)blY)
+            };
+            g.FillPolygon(bMid, midPts);
+
+            PointF[] rightPts =
+            {
+                new PointF((float)trX, (float)trY),
+                new PointF((float)brX, (float)brY),
+                new PointF((float)brX, (float)trY)
+            };
+            g.FillPolygon(bRight, rightPts);
+
+            PointF[] trapezoidPts =
+            {
+                new PointF((float)tlX, (float)tlY),
+                new PointF((float)trX, (float)trY),
+                new PointF((float)brX, (float)brY),
+                new PointF((float)blX, (float)blY)
+            };
+            g.DrawPolygon(pen, trapezoidPts);
+
+            g.DrawLine(pen, (float)blX, (float)blY, (float)blX, (float)tlY);
+            g.DrawLine(pen, (float)brX, (float)brY, (float)brX, (float)trY);
+        }
+
+        private void DrawTrapezoidShape(
+            Graphics g,
+            double centerX, double centerY,
+            double topWidth, double bottomWidth, double height)
+        {
+            Color fillRect = Color.LightGray;
+            Color leftColor = Color.LightBlue;
+            Color midColor = Color.LightGreen;
+            Color rightColor = Color.LightPink;
+
+            using (var bRect = new SolidBrush(fillRect))
+            using (var bLeft = new SolidBrush(leftColor))
+            using (var bMid = new SolidBrush(midColor))
+            using (var bRight = new SolidBrush(rightColor))
+            using (var pen = new Pen(Color.Black, 2))
+            {
+                DrawTrapezoidCore(
+                    g, centerX, centerY, topWidth, bottomWidth, height,
+                    bRect, bLeft, bMid, bRight, pen);
+            }
+        }
+
+        private void EraseTrapezoid(
+            Graphics g,
+            double centerX, double centerY,
+            double topWidth, double bottomWidth, double height)
+        {
+            if (_stretchedBackground != null)
+            {
+                using (var brushFill = new TextureBrush(_stretchedBackground, WrapMode.Tile))
+                using (var brushPen = new TextureBrush(_stretchedBackground, WrapMode.Tile))
+                using (var pen = new Pen(brushPen, 2 + ERASE_PEN_EXTRA))
+                {
+                    DrawTrapezoidCore(
+                        g, centerX, centerY, topWidth, bottomWidth, height,
+                        brushFill, brushFill, brushFill, brushFill, pen);
+                }
+            }
+            else
+            {
+                using (var brushFill = new SolidBrush(Color.White))
+                using (var pen = new Pen(Color.White, 2 + ERASE_PEN_EXTRA))
+                {
+                    DrawTrapezoidCore(
+                        g, centerX, centerY, topWidth, bottomWidth, height,
+                        brushFill, brushFill, brushFill, brushFill, pen);
+                }
+            }
         }
 
         private PointF RotatePoint(float x, float y, float cx, float cy, double angle)
@@ -135,134 +345,14 @@ namespace Lab1_OZR1
             return new PointF(rotatedX, rotatedY);
         }
 
-        private void DrawBackground(Graphics g, double angle, bool erase)
-        {
-            Color fillColor = Color.White;
-            Color penColor = erase ? Color.White : Color.Black;
-            int penWidth = erase ? 4 : 2;   // Делаем толще чтобы точно все затереть
-
-            using (Brush brush = new SolidBrush(fillColor))
-            using (Pen pen = new Pen(penColor, penWidth))
-            {
-                int cx = ClientSize.Width / 2;
-                int cy = ClientSize.Height / 2;
-
-                int s = 50;
-
-                for(int colRomb = 0; colRomb < RINGS; colRomb++)
-                {
-                    PointF[] romb = new PointF[4];
-                    romb[0] = new PointF((float)(cx), (float)(cy - s));
-                    romb[1] = new PointF((float)(cx + s), (float)(cy));
-                    romb[2] = new PointF((float)(cx), (float)(cy + s));
-                    romb[3] = new PointF((float)(cx - s), (float)(cy));
-
-                    romb[0] = RotatePoint(romb[0].X, romb[0].Y, cx, cy, angle + colRomb * 3);
-                    romb[1] = RotatePoint(romb[1].X, romb[1].Y, cx, cy, angle + colRomb * 3);
-                    romb[2] = RotatePoint(romb[2].X, romb[2].Y, cx, cy, angle + colRomb * 3);
-                    romb[3] = RotatePoint(romb[3].X, romb[3].Y, cx, cy, angle + colRomb * 3);
-
-                    s += 20;
-
-                    g.DrawPolygon(pen, romb);
-                }
-            }
-        }
-
-        private void DrawTrapezoidShape
-        (
-            Graphics g,
-            double centerX, double centerY,
-            double topWidth, double bottomWidth, double height,
-            bool erase
-        )
-        {
-            // Вершины
-            double tlX = centerX - topWidth / 2.0;
-            double tlY = centerY - height / 2.0;
-            double trX = centerX + topWidth / 2.0;
-            double trY = centerY - height / 2.0;
-            double blX = centerX - bottomWidth / 2.0;
-            double blY = centerY + height / 2.0;
-            double brX = centerX + bottomWidth / 2.0;
-            double brY = centerY + height / 2.0;
-
-            // Цвета и толщина пера
-            Color fillRect = Color.White;
-            Color leftColor = Color.White;
-            Color midColor = Color.White;
-            Color rightColor = Color.White;
-            Color outline = erase ? Color.White : Color.Black;
-            int penWidth = erase ? 4 : 2;
-
-            if (!erase)
-            {
-                fillRect = Color.LightGray;
-                leftColor = Color.LightBlue;
-                midColor = Color.LightGreen;
-                rightColor = Color.LightPink;
-            }
-
-            using (Brush bRect = new SolidBrush(fillRect))
-            using (Brush bLeft = new SolidBrush(leftColor))
-            using (Brush bMid = new SolidBrush(midColor))
-            using (Brush bRight = new SolidBrush(rightColor))
-            using (Pen pen = new Pen(outline, penWidth))
-            {
-                double left = centerX - topWidth / 2.0;
-                double top = centerY - height / 2.0;
-                double width = topWidth;
-                double rectH = height;
-
-                g.FillRectangle(bRect,
-                    (float)left, (float)top,
-                    (float)width, (float)rectH);
-
-                PointF[] leftPts =
-                {
-                    new PointF((float)tlX, (float)tlY),
-                    new PointF((float)blX, (float)blY),
-                    new PointF((float)blX, (float)tlY)
-                };
-                g.FillPolygon(bLeft, leftPts);
-
-                PointF[] midPts =
-                {
-                    new PointF((float)blX, (float)tlY),
-                    new PointF((float)brX, (float)tlY),
-                    new PointF((float)brX, (float)blY),
-                    new PointF((float)blX, (float)blY)
-                };
-                g.FillPolygon(bMid, midPts);
-
-                PointF[] rightPts =
-                {
-                    new PointF((float)trX, (float)trY),
-                    new PointF((float)brX, (float)brY),
-                    new PointF((float)brX, (float)trY)
-                };
-                g.FillPolygon(bRight, rightPts);
-
-                PointF[] trapezoidPts =
-                {
-                    new PointF((float)tlX, (float)tlY),
-                    new PointF((float)trX, (float)trY),
-                    new PointF((float)brX, (float)brY),
-                    new PointF((float)blX, (float)blY)
-                };
-                g.DrawPolygon(pen, trapezoidPts);
-
-                g.DrawLine(pen, (float)blX, (float)blY, (float)blX, (float)tlY);
-                g.DrawLine(pen, (float)brX, (float)brY, (float)brX, (float)trY);
-            }
-        }
-
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
             _timer?.Stop();
             _timer?.Dispose();
             _bufferGraphics?.Dispose();
             _buffer?.Dispose();
+            _stretchedBackground?.Dispose();
+            _backgroundImage?.Dispose();
 
             base.OnFormClosed(e);
         }
