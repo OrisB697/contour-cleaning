@@ -4,6 +4,7 @@ namespace Lab1_OZR1.Geometry
 {
     /// <summary>
     /// Геометрическое описание равнобедренной перевёрнутой трапеции.
+    /// Используется как вспомогательный геометрический примитив.
     /// </summary>
     public class TrapezoidGeometry
     {
@@ -11,19 +12,10 @@ namespace Lab1_OZR1.Geometry
 
         public double CenterY { get; }
 
-        /// <summary>
-        /// Ширина верхнего основания.
-        /// </summary>
         public double TopWidth { get; }
 
-        /// <summary>
-        /// Ширина нижнего основания.
-        /// </summary>
         public double BottomWidth { get; }
 
-        /// <summary>
-        /// Высота трапеции.
-        /// </summary>
         public double Height { get; }
 
         public TrapezoidGeometry(

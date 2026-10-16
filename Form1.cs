@@ -1,58 +1,46 @@
-﻿using Lab1_OZR1.Geometry;
+﻿using Lab1_OZR1.Editor;
+using Lab1_OZR1.Geometry;
 using Lab1_OZR1.Movement;
 using System;
+using System.Collections.Generic;
 using System.Drawing;
-using System.Net.NetworkInformation;
-using System.Security.Policy;
 using System.Windows.Forms;
 
 namespace Lab1_OZR1
 {
     public partial class Form1 : Form
     {
-
-        private MovingTrapezoid _trapezoid;
-        private Rectangle2D _area;
-
-        private double _prevCenterX;
-        private double _prevCenterY;
+        private Scene _scene;
 
         private Timer _timer;
-        private double _angle;         // текущий угол поворота фона
-        private double _paintedAngle;  // угол отрисованный
-        private Bitmap _buffer;        // задний буфер
+
+        private double _angle;
+        private double _paintedAngle;
+
+        private Bitmap _buffer;
         private Graphics _bufferGraphics;
 
+        /// <summary>
+        /// Признак необходимости полной перерисовки.
+        /// Устанавливается при структурных изменениях сцены
+        /// (создание, удаление, смена порядка, правка свойств).
+        /// В остальных кадрах используется контурная очистка.
+        /// </summary>
+        private bool _fullRedraw = true;
+
         private const int RINGS = 17;
-        private const int PER_RING = 8;
-        private const double PI = Math.PI;
 
         public Form1()
         {
             InitializeComponent();
 
-            this.ClientSize = new Size(900, 700);
-            this.Text = "ЛР1 — КВ2 — контурная очистка";
+            this.ClientSize = new Size(1200, 800);
+            this.Text = "ЛР1 — КВ2 — универсальная фигура + контурная очистка";
 
-            // Двойная буферизация 
-            this.DoubleBuffered = true;
+            _scene = new Scene(
+                new Rectangle2D(0, 0, panelScene.Width, panelScene.Height));
 
-            // Область движения
-            _area = new Rectangle2D(0, 0, ClientSize.Width, ClientSize.Height);
-
-            _trapezoid = new MovingTrapezoid(
-                centerX: 450,
-                centerY: 350,
-                topWidth: 200,
-                bottomWidth: 100,
-                height: 120,
-                velocity: new Vector2D(3, 2)
-            );
-
-            _prevCenterX = _trapezoid.CenterX;
-            _prevCenterY = _trapezoid.CenterY;
-
-            _buffer = new Bitmap(ClientSize.Width, ClientSize.Height);
+            _buffer = new Bitmap(panelScene.Width, panelScene.Height);
             _bufferGraphics = Graphics.FromImage(_buffer);
             ClearBuffer();
 
@@ -61,106 +49,150 @@ namespace Lab1_OZR1
             _timer.Tick += Timer_Tick;
             _timer.Start();
 
-            this.Resize += Form1_Resize;
+            panelScene.Paint += PanelScene_Paint;
+            panelScene.MouseClick += PanelScene_MouseClick;
+            panelScene.Resize += PanelScene_Resize;
+
+            lstShapes.SelectedIndexChanged += LstShapes_SelectedIndexChanged;
+
+            btnCreateShape.Click += BtnCreateShape_Click;
+            btnDelete.Click += BtnDelete_Click;
+            btnOrderUp.Click += BtnOrderUp_Click;
+            btnOrderDown.Click += BtnOrderDown_Click;
+
+            propertyGrid.PropertyValueChanged += PropertyGrid_PropertyValueChanged;
         }
+
+        // ============================================================
+        // БУФЕР
+        // ============================================================
 
         private void ClearBuffer()
         {
             _bufferGraphics.Clear(Color.White);
         }
 
-        private void Form1_Resize(object sender, EventArgs e)
+        private void PanelScene_Resize(object sender, EventArgs e)
         {
-            if (ClientSize.Width <= 0 || ClientSize.Height <= 0)
+            if (panelScene.Width <= 0 || panelScene.Height <= 0)
+            {
                 return;
+            }
 
-            _area = new Rectangle2D(0, 0, ClientSize.Width, ClientSize.Height);
+            _scene.Area = new Rectangle2D(
+                0, 0, panelScene.Width, panelScene.Height);
 
             _bufferGraphics?.Dispose();
             _buffer?.Dispose();
 
-            _buffer = new Bitmap(ClientSize.Width, ClientSize.Height);
+            _buffer = new Bitmap(panelScene.Width, panelScene.Height);
             _bufferGraphics = Graphics.FromImage(_buffer);
             ClearBuffer();
 
-            Invalidate();
+            _fullRedraw = true;
+
+            panelScene.Invalidate();
         }
+
+        // ============================================================
+        // ЦИКЛ
+        // ============================================================
 
         private void Timer_Tick(object sender, EventArgs e)
         {
-            _prevCenterX = _trapezoid.CenterX;
-            _prevCenterY = _trapezoid.CenterY;
-
-            _trapezoid.Update(_area);
+            _scene.Update();
 
             _angle += 0.02;
 
-            Invalidate();
+            panelScene.Invalidate();
         }
 
-        protected override void OnPaint(PaintEventArgs e)
+        // ============================================================
+        // ОТРИСОВКА (КОНТУРНАЯ ОЧИСТКА)
+        // ============================================================
+
+        private void PanelScene_Paint(object sender, PaintEventArgs e)
         {
-            base.OnPaint(e);
+            if (_fullRedraw)
+            {
+                ClearBuffer();
+            }
+            else
+            {
+                // 1. Стереть все фигуры на предыдущих позициях.
+                foreach (MovingShape shape in _scene.Ordered())
+                {
+                    shape.DrawAt(
+                        _bufferGraphics,
+                        shape.PrevCenterX,
+                        shape.PrevCenterY,
+                        erase: true);
+                }
 
-            DrawTrapezoidShape(
-                _bufferGraphics,
-                _prevCenterX, _prevCenterY,
-                _trapezoid.TopWidth, _trapezoid.BottomWidth, _trapezoid.Height,
-                erase: true);
+                // 2. Стереть фон при старом угле.
+                DrawBackground(_bufferGraphics, _paintedAngle, erase: true);
+            }
 
-            DrawBackground(_bufferGraphics, _paintedAngle, erase: true);
-
+            // 3. Рисуем фон при новом угле.
             DrawBackground(_bufferGraphics, _angle, erase: false);
 
-            DrawTrapezoidShape(
-                _bufferGraphics,
-                _trapezoid.CenterX, _trapezoid.CenterY,
-                _trapezoid.TopWidth, _trapezoid.BottomWidth, _trapezoid.Height,
-                erase: false);
-
-            // 5. Копируем задний буфер на экран
-            e.Graphics.DrawImageUnscaled(_buffer, 0, 0);
+            // 4. Рисуем все фигуры в порядке Order.
+            foreach (MovingShape shape in _scene.Ordered())
+            {
+                shape.DrawAt(
+                    _bufferGraphics,
+                    shape.CenterX,
+                    shape.CenterY,
+                    erase: false);
+            }
 
             _paintedAngle = _angle;
+            _fullRedraw = false;
+
+            // 5. Копируем буфер на экран.
+            e.Graphics.DrawImageUnscaled(_buffer, 0, 0);
         }
 
         private PointF RotatePoint(float x, float y, float cx, float cy, double angle)
         {
             double cosA = Math.Cos(angle);
             double sinA = Math.Sin(angle);
+
             float dx = x - cx;
             float dy = y - cy;
+
             float rotatedX = (float)(dx * cosA - dy * sinA + cx);
             float rotatedY = (float)(dx * sinA + dy * cosA + cy);
+
             return new PointF(rotatedX, rotatedY);
         }
 
         private void DrawBackground(Graphics g, double angle, bool erase)
         {
-            Color fillColor = Color.White;
             Color penColor = erase ? Color.White : Color.Black;
-            int penWidth = erase ? 4 : 2;   // Делаем толще чтобы точно все затереть
+            int penWidth = erase ? 4 : 2;
 
-            using (Brush brush = new SolidBrush(fillColor))
             using (Pen pen = new Pen(penColor, penWidth))
             {
-                int cx = ClientSize.Width / 2;
-                int cy = ClientSize.Height / 2;
+                int cx = panelScene.Width / 2;
+                int cy = panelScene.Height / 2;
 
                 int s = 50;
 
-                for(int colRomb = 0; colRomb < RINGS; colRomb++)
+                for (int colRomb = 0; colRomb < RINGS; colRomb++)
                 {
                     PointF[] romb = new PointF[4];
-                    romb[0] = new PointF((float)(cx), (float)(cy - s));
-                    romb[1] = new PointF((float)(cx + s), (float)(cy));
-                    romb[2] = new PointF((float)(cx), (float)(cy + s));
-                    romb[3] = new PointF((float)(cx - s), (float)(cy));
+                    romb[0] = new PointF(cx, cy - s);
+                    romb[1] = new PointF(cx + s, cy);
+                    romb[2] = new PointF(cx, cy + s);
+                    romb[3] = new PointF(cx - s, cy);
 
-                    romb[0] = RotatePoint(romb[0].X, romb[0].Y, cx, cy, angle + colRomb * 3);
-                    romb[1] = RotatePoint(romb[1].X, romb[1].Y, cx, cy, angle + colRomb * 3);
-                    romb[2] = RotatePoint(romb[2].X, romb[2].Y, cx, cy, angle + colRomb * 3);
-                    romb[3] = RotatePoint(romb[3].X, romb[3].Y, cx, cy, angle + colRomb * 3);
+                    double a = angle + colRomb * 3;
+
+                    for (int i = 0; i < 4; i++)
+                    {
+                        romb[i] = RotatePoint(romb[i].X, romb[i].Y, cx, cy, a);
+                    }
 
                     s += 20;
 
@@ -169,91 +201,151 @@ namespace Lab1_OZR1
             }
         }
 
-        private void DrawTrapezoidShape
-        (
-            Graphics g,
-            double centerX, double centerY,
-            double topWidth, double bottomWidth, double height,
-            bool erase
-        )
+        // ============================================================
+        // ВЗАИМОДЕЙСТВИЕ
+        // ============================================================
+
+        private void PanelScene_MouseClick(object sender, MouseEventArgs e)
         {
-            // Вершины
-            double tlX = centerX - topWidth / 2.0;
-            double tlY = centerY - height / 2.0;
-            double trX = centerX + topWidth / 2.0;
-            double trY = centerY - height / 2.0;
-            double blX = centerX - bottomWidth / 2.0;
-            double blY = centerY + height / 2.0;
-            double brX = centerX + bottomWidth / 2.0;
-            double brY = centerY + height / 2.0;
+            Point2D point = new Point2D(e.X, e.Y);
 
-            // Цвета и толщина пера
-            Color fillRect = Color.White;
-            Color leftColor = Color.White;
-            Color midColor = Color.White;
-            Color rightColor = Color.White;
-            Color outline = erase ? Color.White : Color.Black;
-            int penWidth = erase ? 4 : 2;
+            MovingShape shape = _scene.GetShapeAt(point);
 
-            if (!erase)
+            if (shape != null)
             {
-                fillRect = Color.LightGray;
-                leftColor = Color.LightBlue;
-                midColor = Color.LightGreen;
-                rightColor = Color.LightPink;
+                lstShapes.SelectedItem = shape;
+            }
+        }
+
+        private void LstShapes_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            propertyGrid.SelectedObject = lstShapes.SelectedItem as MovingShape;
+        }
+
+        private void PropertyGrid_PropertyValueChanged(
+            object sender,
+            PropertyValueChangedEventArgs e)
+        {
+            _fullRedraw = true;
+
+            RefreshShapeList();
+
+            panelScene.Invalidate();
+        }
+
+        private void BtnCreateShape_Click(object sender, EventArgs e)
+        {
+            using (PolygonEditorForm editor = new PolygonEditorForm())
+            {
+                if (editor.ShowDialog(this) != DialogResult.OK)
+                {
+                    return;
+                }
+
+                IReadOnlyList<Point2D> vertices = editor.Vertices;
+
+                double cx = 0.0;
+                double cy = 0.0;
+
+                foreach (Point2D v in vertices)
+                {
+                    cx += v.X;
+                    cy += v.Y;
+                }
+
+                cx /= vertices.Count;
+                cy /= vertices.Count;
+
+                MovingCustomPolygon shape = new MovingCustomPolygon(
+                    cx, cy, vertices, new Vector2D(2, 2));
+
+                // Помещаем фигуру в центр сцены, сохраняя форму.
+                shape.CenterX = panelScene.Width / 2.0;
+                shape.CenterY = panelScene.Height / 2.0;
+                shape.PrevCenterX = shape.CenterX;
+                shape.PrevCenterY = shape.CenterY;
+
+                shape.Color = Color.LightSkyBlue;
+
+                _scene.AddShape(shape);
+
+                _fullRedraw = true;
+
+                RefreshShapeList();
+                lstShapes.SelectedItem = shape;
+                panelScene.Invalidate();
+            }
+        }
+
+        private void BtnDelete_Click(object sender, EventArgs e)
+        {
+            MovingShape shape = lstShapes.SelectedItem as MovingShape;
+
+            if (shape == null)
+            {
+                return;
             }
 
-            using (Brush bRect = new SolidBrush(fillRect))
-            using (Brush bLeft = new SolidBrush(leftColor))
-            using (Brush bMid = new SolidBrush(midColor))
-            using (Brush bRight = new SolidBrush(rightColor))
-            using (Pen pen = new Pen(outline, penWidth))
+            _scene.RemoveShape(shape);
+
+            _fullRedraw = true;
+
+            propertyGrid.SelectedObject = null;
+
+            RefreshShapeList();
+            panelScene.Invalidate();
+        }
+
+        private void BtnOrderUp_Click(object sender, EventArgs e)
+        {
+            MovingShape shape = lstShapes.SelectedItem as MovingShape;
+
+            if (shape == null)
             {
-                double left = centerX - topWidth / 2.0;
-                double top = centerY - height / 2.0;
-                double width = topWidth;
-                double rectH = height;
+                return;
+            }
 
-                g.FillRectangle(bRect,
-                    (float)left, (float)top,
-                    (float)width, (float)rectH);
+            _scene.MoveOrderUp(shape);
 
-                PointF[] leftPts =
-                {
-                    new PointF((float)tlX, (float)tlY),
-                    new PointF((float)blX, (float)blY),
-                    new PointF((float)blX, (float)tlY)
-                };
-                g.FillPolygon(bLeft, leftPts);
+            _fullRedraw = true;
 
-                PointF[] midPts =
-                {
-                    new PointF((float)blX, (float)tlY),
-                    new PointF((float)brX, (float)tlY),
-                    new PointF((float)brX, (float)blY),
-                    new PointF((float)blX, (float)blY)
-                };
-                g.FillPolygon(bMid, midPts);
+            RefreshShapeList();
+            lstShapes.SelectedItem = shape;
+            panelScene.Invalidate();
+        }
 
-                PointF[] rightPts =
-                {
-                    new PointF((float)trX, (float)trY),
-                    new PointF((float)brX, (float)brY),
-                    new PointF((float)brX, (float)trY)
-                };
-                g.FillPolygon(bRight, rightPts);
+        private void BtnOrderDown_Click(object sender, EventArgs e)
+        {
+            MovingShape shape = lstShapes.SelectedItem as MovingShape;
 
-                PointF[] trapezoidPts =
-                {
-                    new PointF((float)tlX, (float)tlY),
-                    new PointF((float)trX, (float)trY),
-                    new PointF((float)brX, (float)brY),
-                    new PointF((float)blX, (float)blY)
-                };
-                g.DrawPolygon(pen, trapezoidPts);
+            if (shape == null)
+            {
+                return;
+            }
 
-                g.DrawLine(pen, (float)blX, (float)blY, (float)blX, (float)tlY);
-                g.DrawLine(pen, (float)brX, (float)brY, (float)brX, (float)trY);
+            _scene.MoveOrderDown(shape);
+
+            _fullRedraw = true;
+
+            RefreshShapeList();
+            lstShapes.SelectedItem = shape;
+            panelScene.Invalidate();
+        }
+
+        private void RefreshShapeList()
+        {
+            object selected = lstShapes.SelectedItem;
+
+            lstShapes.Items.Clear();
+
+            foreach (MovingShape shape in _scene.Ordered())
+            {
+                lstShapes.Items.Add(shape);
+            }
+
+            if (selected != null && lstShapes.Items.Contains(selected))
+            {
+                lstShapes.SelectedItem = selected;
             }
         }
 
