@@ -24,7 +24,6 @@ namespace Lab1_OZR1
         private Graphics _bufferGraphics;
 
         private const int RINGS = 17;
-        private const int PER_RING = 8;
         private const double PI = Math.PI;
 
         public Form1()
