@@ -25,6 +25,10 @@ namespace Lab1_OZR1
         private Bitmap _backgroundImage;
         private Bitmap _stretchedBackground;
 
+        // ---------- Статический объект "Луна" ----------
+        private Bitmap _moonImage;
+        private Rectangle _moonRect = new Rectangle(620, 80, 160, 160);
+
         private const int RINGS = 17;
         private const int PER_RING = 8;
         private const double PI = Math.PI;
@@ -33,6 +37,8 @@ namespace Lab1_OZR1
 
         private const string BackgroundFileName =
             "the-center-of-milky-way-galaxy-and-space-dust-in-the-universe-night-starry-sky-with-stars-photo.jpg";
+
+        private const string MoonFileName = "luna-na-prozrachnom-fone.png";
 
         public Form1()
         {
@@ -44,6 +50,7 @@ namespace Lab1_OZR1
             this.DoubleBuffered = true;
 
             _backgroundImage = LoadBackgroundImage();
+            _moonImage = LoadMoonImage();
 
             _area = new Rectangle2D(0, 0, ClientSize.Width, ClientSize.Height);
 
@@ -68,6 +75,10 @@ namespace Lab1_OZR1
 
             this.Resize += Form1_Resize;
         }
+
+        // ============================================================
+        // ЗАГРУЗКА ФОНОВОГО ИЗОБРАЖЕНИЯ
+        // ============================================================
 
         private Bitmap LoadBackgroundImage()
         {
@@ -95,6 +106,52 @@ namespace Lab1_OZR1
 
             return null;
         }
+
+        // ============================================================
+        // ЗАГРУЗКА ЛУНЫ (PNG с прозрачностью)
+        // ============================================================
+
+        private Bitmap LoadMoonImage()
+        {
+            try
+            {
+                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                string path = Path.Combine(baseDir, "assets", MoonFileName);
+
+                if (!File.Exists(path))
+                    path = Path.Combine("assets", MoonFileName);
+
+                if (!File.Exists(path))
+                    return null;
+
+                using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read))
+                using (var source = new Bitmap(fs))
+                {
+                    // Масштабируем под размер прямоугольника на экране
+                    var result = new Bitmap(_moonRect.Width, _moonRect.Height);
+
+                    using (var g = Graphics.FromImage(result))
+                    {
+                        g.SmoothingMode = SmoothingMode.AntiAlias;
+                        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                        g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+                        // Прозрачность PNG сохраняется автоматически
+                        g.DrawImage(source, 0, 0, result.Width, result.Height);
+                    }
+
+                    return result;
+                }
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        // ============================================================
+        // БУФЕР
+        // ============================================================
 
         private void ResetBuffer()
         {
@@ -151,6 +208,10 @@ namespace Lab1_OZR1
             Invalidate();
         }
 
+        // ============================================================
+        // ОТРИСОВКА КАДРА
+        // ============================================================
+
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
@@ -169,10 +230,34 @@ namespace Lab1_OZR1
                 _trapezoid.CenterX, _trapezoid.CenterY,
                 _trapezoid.TopWidth, _trapezoid.BottomWidth, _trapezoid.Height);
 
+            // === Статический объект "Луна" — поверх движущейся фигуры ===
+            DrawStaticElements(_bufferGraphics);
+
             e.Graphics.DrawImageUnscaled(_buffer, 0, 0);
 
             _paintedAngle = _angle;
         }
+
+        // ============================================================
+        // СТАТИЧЕСКИЕ ДЕКОРАЦИИ
+        // ============================================================
+
+        private void DrawStaticElements(Graphics g)
+        {
+            if (_moonImage == null)
+                return;
+
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+            // Прозрачные пиксели PNG не перекрывают фон
+            g.DrawImage(_moonImage, _moonRect);
+        }
+
+        // ============================================================
+        // СЕТКА (РОМБЫ)
+        // ============================================================
 
         private void DrawRombs(Graphics g, Pen pen, double angle)
         {
@@ -223,6 +308,10 @@ namespace Lab1_OZR1
                 DrawRombs(g, pen, angle);
             }
         }
+
+        // ============================================================
+        // ТРАПЕЦИЯ
+        // ============================================================
 
         private void DrawTrapezoidCore(
             Graphics g,
@@ -345,6 +434,10 @@ namespace Lab1_OZR1
             return new PointF(rotatedX, rotatedY);
         }
 
+        // ============================================================
+        // ЗАВЕРШЕНИЕ РАБОТЫ
+        // ============================================================
+
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
             _timer?.Stop();
@@ -353,6 +446,7 @@ namespace Lab1_OZR1
             _buffer?.Dispose();
             _stretchedBackground?.Dispose();
             _backgroundImage?.Dispose();
+            _moonImage?.Dispose();
 
             base.OnFormClosed(e);
         }
